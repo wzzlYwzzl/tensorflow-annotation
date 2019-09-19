@@ -90,12 +90,9 @@ class ReaderReadOp : public ReaderVerbAsyncOpKernel {
     OP_REQUIRES_OK(context,
                    context->allocate_output("value", TensorShape({}), &value));
 
-    auto key_scalar = key->scalar<tstring>();
-    auto value_scalar = value->scalar<tstring>();
-    tstring key_out, val_out;
-    reader->Read(queue, &key_out, &val_out, context);
-    key_scalar() = key_out;
-    value_scalar() = val_out;
+    auto key_scalar = key->scalar<string>();
+    auto value_scalar = value->scalar<string>();
+    reader->Read(queue, &key_scalar(), &value_scalar(), context);
   }
 };
 
@@ -118,9 +115,9 @@ class ReaderReadUpToOp : public ReaderVerbAsyncOpKernel {
                    GetResourceFromContext(context, "queue_handle", &queue));
     core::ScopedUnref unref_me(queue);
 
-    std::vector<tstring> keys_vec;
+    std::vector<string> keys_vec;
     keys_vec.reserve(num_records);
-    std::vector<tstring> values_vec;
+    std::vector<string> values_vec;
     values_vec.reserve(num_records);
 
     int64 num_actually_read =
@@ -142,8 +139,8 @@ class ReaderReadUpToOp : public ReaderVerbAsyncOpKernel {
                    context->allocate_output(
                        "values", TensorShape({num_actually_read}), &values));
 
-    auto keys_t = keys->vec<tstring>();
-    auto values_t = values->vec<tstring>();
+    auto keys_t = keys->vec<string>();
+    auto values_t = values->vec<string>();
     for (int i = 0; i < num_actually_read; ++i) {
       keys_t(i) = std::move(keys_vec[i]);
       values_t(i) = std::move(values_vec[i]);
@@ -203,7 +200,7 @@ class ReaderSerializeStateOp : public ReaderVerbSyncOpKernel {
     OP_REQUIRES_OK(context,
                    context->allocate_output("state", TensorShape({}), &output));
     OP_REQUIRES_OK(context,
-                   reader->SerializeState(&output->scalar<tstring>()()));
+                   reader->SerializeState(&output->scalar<string>()()));
   }
 };
 
@@ -224,7 +221,7 @@ class ReaderRestoreStateOp : public ReaderVerbSyncOpKernel {
         context, TensorShapeUtils::IsScalar(tensor->shape()),
         errors::InvalidArgument("Reader state must be scalar, but had shape: ",
                                 tensor->shape().DebugString()));
-    OP_REQUIRES_OK(context, reader->RestoreState(tensor->scalar<tstring>()()));
+    OP_REQUIRES_OK(context, reader->RestoreState(tensor->scalar<string>()()));
   }
 };
 

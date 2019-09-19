@@ -23,7 +23,6 @@ limitations under the License.
 #include "tensorflow/compiler/jit/xla_tensor.h"
 #include "tensorflow/compiler/tf2xla/xla_compiler.h"
 #include "tensorflow/compiler/xla/client/local_client.h"
-#include "tensorflow/compiler/xla/service/shaped_buffer.h"
 #include "tensorflow/core/framework/allocation_description.pb.h"
 #include "tensorflow/core/framework/resource_var.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -150,21 +149,16 @@ class XlaComputationLaunchContext {
   //
   // Assumes that the first `missing_ctx_input_prefix` inputs to the kernel are
   // missing and adjusts input indices accordingly.
-  Status PopulateOutputs(
-      OpKernelContext* ctx, const XlaCompiler::CompilationResult* kernel,
-      xla::ScopedShapedBuffer output, int missing_ctx_input_prefix,
-      const xla::HloInputOutputAliasConfig& input_output_alias);
+  Status PopulateOutputs(OpKernelContext* ctx,
+                         const XlaCompiler::CompilationResult* kernel,
+                         xla::ScopedShapedBuffer output,
+                         int missing_ctx_input_prefix);
 
   // Return the argument list. Only valid after PopulateInputs() has been
   // called.
   const std::vector<xla::ShapedBuffer*>& arguments() const { return arg_ptrs_; }
 
  private:
-  Tensor MakeOutputTensor(
-      DataType type, const TensorShape& shape, se::DeviceMemoryBase buffer,
-      int output_num, const xla::HloInputOutputAliasConfig& input_output_alias,
-      Allocator* allocator);
-
   xla::LocalClient* client_;
   se::DeviceMemoryAllocator* xla_allocator_;
   bool allocate_xla_tensors_;
@@ -199,15 +193,12 @@ class XlaTensorBuffer : public TensorBuffer {
   }
 
   static Tensor MakeTensor(DataType dtype, const TensorShape& shape,
-                           bool unref_buffer, se::DeviceMemoryBase buffer,
-                           Allocator* allocator) {
+                           se::DeviceMemoryBase buffer, Allocator* allocator) {
     size_t expected_size = shape.num_elements() * DataTypeSize(dtype);
     auto* tensor_buffer = new XlaTensorBuffer(buffer.opaque(), expected_size,
                                               buffer.size(), allocator);
     Tensor t(dtype, shape, tensor_buffer);
-    if (unref_buffer) {
-      tensor_buffer->Unref();
-    }
+    tensor_buffer->Unref();
     return t;
   }
 

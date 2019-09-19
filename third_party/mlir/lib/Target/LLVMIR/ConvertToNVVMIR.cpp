@@ -23,9 +23,10 @@
 #include "mlir/Target/NVVMIR.h"
 
 #include "mlir/Dialect/GPU/GPUDialect.h"
-#include "mlir/Dialect/LLVMIR/NVVMDialect.h"
 #include "mlir/IR/Function.h"
 #include "mlir/IR/Module.h"
+#include "mlir/LLVMIR/NVVMDialect.h"
+#include "mlir/Support/FileUtilities.h"
 #include "mlir/Target/LLVMIR/ModuleTranslation.h"
 #include "mlir/Translation.h"
 
@@ -37,11 +38,10 @@ using namespace mlir;
 
 namespace {
 static llvm::Value *createIntrinsicCall(llvm::IRBuilder<> &builder,
-                                        llvm::Intrinsic::ID intrinsic,
-                                        ArrayRef<llvm::Value *> args = {}) {
+                                        llvm::Intrinsic::ID intrinsic) {
   llvm::Module *module = builder.GetInsertBlock()->getModule();
-  llvm::Function *fn = llvm::Intrinsic::getDeclaration(module, intrinsic);
-  return builder.CreateCall(fn, args);
+  llvm::Function *fn = llvm::Intrinsic::getDeclaration(module, intrinsic, {});
+  return builder.CreateCall(fn);
 }
 
 class ModuleTranslation : public LLVM::ModuleTranslation {
@@ -52,10 +52,10 @@ public:
   ~ModuleTranslation() override {}
 
 protected:
-  LogicalResult convertOperation(Operation &opInst,
-                                 llvm::IRBuilder<> &builder) override {
+  bool convertOperation(Operation &opInst,
+                        llvm::IRBuilder<> &builder) override {
 
-#include "mlir/Dialect/LLVMIR/NVVMConversions.inc"
+#include "mlir/LLVMIR/NVVMConversions.inc"
 
     return LLVM::ModuleTranslation::convertOperation(opInst, builder);
   }
@@ -91,11 +91,19 @@ std::unique_ptr<llvm::Module> mlir::translateModuleToNVVMIR(ModuleOp m) {
 
 static TranslateFromMLIRRegistration
     registration("mlir-to-nvvmir",
-                 [](ModuleOp module, llvm::raw_ostream &output) {
+                 [](ModuleOp module, llvm::StringRef outputFilename) {
+                   if (!module)
+                     return failure();
+
                    auto llvmModule = mlir::translateModuleToNVVMIR(module);
                    if (!llvmModule)
                      return failure();
 
-                   llvmModule->print(output, nullptr);
+                   auto file = openOutputFile(outputFilename);
+                   if (!file)
+                     return failure();
+
+                   llvmModule->print(file->os(), nullptr);
+                   file->keep();
                    return success();
                  });

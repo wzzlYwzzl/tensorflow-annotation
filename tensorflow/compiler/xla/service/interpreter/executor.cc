@@ -33,9 +33,7 @@ XlaInterpreterExecutor::XlaInterpreterExecutor(
 
 XlaInterpreterExecutor::~XlaInterpreterExecutor() {}
 
-DeviceMemoryBase XlaInterpreterExecutor::Allocate(uint64 size) {
-  return DeviceMemoryBase(new char[size], size);
-}
+void *XlaInterpreterExecutor::Allocate(uint64 size) { return new char[size]; }
 
 void *XlaInterpreterExecutor::GetSubBuffer(DeviceMemoryBase *parent,
                                            uint64 offset_bytes,

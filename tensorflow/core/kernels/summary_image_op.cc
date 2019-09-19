@@ -61,7 +61,7 @@ class SummaryImageOp : public OpKernel {
                 errors::InvalidArgument(
                     "Tensor must be 4-D with last dim 1, 3, or 4, not ",
                     tensor.shape().DebugString()));
-    const string& base_tag = tags.scalar<tstring>()();
+    const string& base_tag = tags.scalar<string>()();
 
     OP_REQUIRES(c,
                 tensor.dim_size(0) < (1LL << 31) &&
@@ -106,7 +106,7 @@ class SummaryImageOp : public OpKernel {
 
     Tensor* summary_tensor = nullptr;
     OP_REQUIRES_OK(c, c->allocate_output(0, TensorShape({}), &summary_tensor));
-    CHECK(SerializeToTString(s, &summary_tensor->scalar<tstring>()()));
+    CHECK(s.SerializeToString(&summary_tensor->scalar<string>()()));
   }
 
   template <class T>

@@ -84,9 +84,8 @@ class TakeWhileDatasetOp : public UnaryDatasetOpKernel {
 
     int64 Cardinality() const override { return kUnknownCardinality; }
 
-    Status CheckExternalState() const override {
-      TF_RETURN_IF_ERROR(captured_func_->CheckExternalState());
-      return input_->CheckExternalState();
+    bool IsStateful() const override {
+      return captured_func_->IsStateful() || input_->IsStateful();
     }
 
    protected:

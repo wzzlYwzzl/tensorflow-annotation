@@ -25,8 +25,6 @@
 #include "mlir/IR/SymbolTable.h"
 
 namespace mlir {
-class ModuleTerminatorOp;
-
 //===----------------------------------------------------------------------===//
 // Module Operation.
 //===----------------------------------------------------------------------===//
@@ -35,11 +33,8 @@ class ModuleTerminatorOp;
 /// single block containing opaque operations. The region of a module is not
 /// allowed to implicitly capture global values, and all external references
 /// must use symbolic references via attributes(e.g. via a string name).
-class ModuleOp
-    : public Op<
-          ModuleOp, OpTrait::ZeroOperands, OpTrait::ZeroResult,
-          OpTrait::IsIsolatedFromAbove, OpTrait::SymbolTable,
-          OpTrait::SingleBlockImplicitTerminator<ModuleTerminatorOp>::Impl> {
+class ModuleOp : public Op<ModuleOp, OpTrait::ZeroOperands, OpTrait::ZeroResult,
+                           OpTrait::IsIsolatedFromAbove, OpTrait::SymbolTable> {
 public:
   using Op::Op;
   using Op::print;
@@ -107,11 +102,13 @@ public:
 /// the terminator in their custom syntax for brevity.
 class ModuleTerminatorOp
     : public Op<ModuleTerminatorOp, OpTrait::ZeroOperands, OpTrait::ZeroResult,
-                OpTrait::HasParent<ModuleOp>::Impl, OpTrait::IsTerminator> {
+                OpTrait::IsTerminator> {
 public:
   using Op::Op;
   static StringRef getOperationName() { return "module_terminator"; }
+
   static void build(Builder *, OperationState *) {}
+  LogicalResult verify();
 };
 
 //===----------------------------------------------------------------------===//

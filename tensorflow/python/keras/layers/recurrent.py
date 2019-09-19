@@ -36,9 +36,7 @@ from tensorflow.python.keras.engine.input_spec import InputSpec
 from tensorflow.python.keras.utils import generic_utils
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import control_flow_util
-from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import state_ops
 from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.training.tracking import base as trackable
@@ -119,7 +117,7 @@ class StackedRNNCells(Layer):
 
     return tuple(initial_states)
 
-  def call(self, inputs, states, constants=None, training=None, **kwargs):
+  def call(self, inputs, states, constants=None, **kwargs):
     # Recover per-cell states.
     state_size = (self.state_size[::-1]
                   if self.reverse_state_order else self.state_size)
@@ -132,10 +130,6 @@ class StackedRNNCells(Layer):
       # TF cell does not wrap the state into list when there is only one state.
       is_tf_rnn_cell = getattr(cell, '_is_tf_rnn_cell', None) is not None
       states = states[0] if len(states) == 1 and is_tf_rnn_cell else states
-      if generic_utils.has_arg(cell.call, 'training'):
-        kwargs['training'] = training
-      else:
-        kwargs.pop('training', None)
       if generic_utils.has_arg(cell.call, 'constants'):
         inputs, states = cell.call(inputs, states, constants=constants,
                                    **kwargs)
@@ -796,22 +790,11 @@ class RNN(Layer):
       if len(initial_state) == 0:
         initial_state = None
       inputs = inputs[0]
-
-    if self.stateful:
-      if initial_state is not None:
-        # When layer is stateful and initial_state is provided, check if the
-        # recorded state is same as the default value (zeros). Use the recorded
-        # state if it is not same as the default.
-        non_zero_count = math_ops.add_n([math_ops.count_nonzero_v2(s)
-                                         for s in nest.flatten(self.states)])
-        # Set strict = True to keep the original structure of the state.
-        initial_state = control_flow_ops.cond(non_zero_count > 0,
-                                              true_fn=lambda: self.states,
-                                              false_fn=lambda: initial_state,
-                                              strict=True)
-      else:
-        initial_state = self.states
-    elif initial_state is None:
+    if initial_state is not None:
+      pass
+    elif self.stateful:
+      initial_state = self.states
+    else:
       initial_state = self.get_initial_state(inputs)
 
     if len(initial_state) != len(self.states):
@@ -823,9 +806,7 @@ class RNN(Layer):
   def reset_states(self, states=None):
     if not self.stateful:
       raise AttributeError('Layer must be stateful.')
-    spec_shape = None
-    if self.input_spec is not None:
-      spec_shape = nest.flatten(self.input_spec[0])[0].shape
+    spec_shape = None if self.input_spec is None else self.input_spec[0].shape
     if spec_shape is None:
       # It is possible to have spec shape to be None, eg when construct a RNN
       # with a custom cell, or standard RNN layers (LSTM/GRU) which we only know
@@ -1393,8 +1374,7 @@ class SimpleRNN(RNN):
         bias_constraint=bias_constraint,
         dropout=dropout,
         recurrent_dropout=recurrent_dropout,
-        dtype=kwargs.get('dtype'),
-        trainable=kwargs.get('trainable', True))
+        dtype=kwargs.get('dtype'))
     super(SimpleRNN, self).__init__(
         cell,
         return_sequences=return_sequences,
@@ -1923,8 +1903,7 @@ class GRU(RNN):
         recurrent_dropout=recurrent_dropout,
         implementation=implementation,
         reset_after=reset_after,
-        dtype=kwargs.get('dtype'),
-        trainable=kwargs.get('trainable', True))
+        dtype=kwargs.get('dtype'))
     super(GRU, self).__init__(
         cell,
         return_sequences=return_sequences,
@@ -2551,8 +2530,7 @@ class LSTM(RNN):
         dropout=dropout,
         recurrent_dropout=recurrent_dropout,
         implementation=implementation,
-        dtype=kwargs.get('dtype'),
-        trainable=kwargs.get('trainable', True))
+        dtype=kwargs.get('dtype'))
     super(LSTM, self).__init__(
         cell,
         return_sequences=return_sequences,

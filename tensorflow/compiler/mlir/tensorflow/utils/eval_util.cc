@@ -78,8 +78,7 @@ mlir::LogicalResult EvaluateOperation(
   if (auto attr = inst->getAttrOfType<mlir::StringAttr>("name")) {
     node_name = attr.getValue();
   }
-  auto node_def_or = ConvertTFDialectOpToNodeDef(
-      inst, node_name.c_str(), /*ignore_unregistered_attrs=*/true);
+  auto node_def_or = ConvertTFDialectOpToNodeDef(inst, node_name.c_str());
   RETURN_FAILURE_IF_ERROR(node_def_or.status());
   const auto& node_def = node_def_or.ValueOrDie();
   TFE_Op* op = TFE_NewOp(context, node_def->op().c_str(), status);

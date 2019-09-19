@@ -1362,12 +1362,7 @@ void MutableGraphView::RemoveNodesInternal(
           removed_node_index;
     }
     nodes_.pop_back();
-  }
-  if (!sorted_node_indices_to_remove.empty()) {
-    const int current_size = graph()->node_size();
-    const int num_to_remove = sorted_node_indices_to_remove.size();
-    graph()->mutable_node()->DeleteSubrange(current_size - num_to_remove,
-                                            num_to_remove);
+    graph()->mutable_node()->RemoveLast();
   }
 }
 

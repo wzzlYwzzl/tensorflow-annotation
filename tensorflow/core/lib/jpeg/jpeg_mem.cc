@@ -592,7 +592,7 @@ bool GetImageInfo(const void* srcdata, int datasize, int* width, int* height,
 
 namespace {
 bool CompressInternal(const uint8* srcdata, int width, int height,
-                      const CompressFlags& flags, tstring* output) {
+                      const CompressFlags& flags, string* output) {
   output->clear();
   const int components = (static_cast<int>(flags.format) & 0xff);
 
@@ -762,14 +762,14 @@ bool CompressInternal(const uint8* srcdata, int width, int height,
 // -----------------------------------------------------------------------------
 
 bool Compress(const void* srcdata, int width, int height,
-              const CompressFlags& flags, tstring* output) {
+              const CompressFlags& flags, string* output) {
   return CompressInternal(static_cast<const uint8*>(srcdata), width, height,
                           flags, output);
 }
 
-tstring Compress(const void* srcdata, int width, int height,
-                 const CompressFlags& flags) {
-  tstring temp;
+string Compress(const void* srcdata, int width, int height,
+                const CompressFlags& flags) {
+  string temp;
   CompressInternal(static_cast<const uint8*>(srcdata), width, height, flags,
                    &temp);
   // If CompressInternal fails, temp will be empty.

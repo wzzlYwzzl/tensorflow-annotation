@@ -33,6 +33,7 @@ limitations under the License.
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/refcount.h"
 #include "tensorflow/core/lib/gtl/map_util.h"
+#include "tensorflow/core/lib/gtl/stl_util.h"
 #include "tensorflow/core/lib/random/random.h"
 #include "tensorflow/core/platform/fingerprint.h"
 #include "tensorflow/core/platform/mutex.h"
@@ -41,9 +42,6 @@ limitations under the License.
 #include "tensorflow/core/public/version.h"
 #include "tensorflow/core/util/tensor_slice_reader_cache.h"
 #if !defined(IS_MOBILE_PLATFORM)
-#if !defined(PLATFORM_WINDOWS)
-#include "tensorflow/compiler/jit/xla_kernel_creator_util.h"
-#endif  // !PLATFORM_WINDOWS
 #include "tensorflow/core/grappler/optimizers/meta_optimizer.h"
 #endif  // !IS_MOBILE_PLATFORM
 
@@ -80,18 +78,7 @@ Status KernelAndDeviceOp::Init(const NodeDef& ndef,
         "A valid FunctionLibraryRuntime must be provided when running ops "
         "based on OpKernel.");
   }
-  if (compile_with_xla_) {
-#if defined(IS_MOBILE_PLATFORM) || defined(PLATFORM_WINDOWS)
-    return errors::Unimplemented(
-        "Compile with XLA is not available on mobile devices and windows.");
-#else   // !IS_MOBILE_PLATFORM && !PLATFORM_WINDOWS
-    std::unique_ptr<OpKernel> kernel;
-    TF_RETURN_IF_ERROR(CreateXlaKernel(flr_, ndef, &kernel));
-    k = kernel.release();
-#endif  // !IS_MOBILE_PLATFORM && !PLATFORM_WINDOWS
-  } else {
-    TF_RETURN_IF_ERROR(flr_->CreateKernel(ndef, &k));
-  }
+  TF_RETURN_IF_ERROR(flr_->CreateKernel(ndef, &k));
   kernel_.reset(k);
   return Status::OK();
 }
@@ -271,14 +258,13 @@ Status KernelAndDeviceOp::Run(ScopedStepContainer* step_container,
   }
 
   OpKernelContext::Params params;
-  params.is_eager = true;
   params.device = device_;
   params.frame_iter = FrameAndIter(0, 0);
   params.inputs = &inputs;
   params.op_kernel = kernel_.get();
   params.resource_manager = device_->resource_manager();
   params.input_alloc_attrs = &in_attrs;
-  params.output_attr_array = out_attrs.data();
+  params.output_attr_array = gtl::vector_as_array(&out_attrs);
   params.function_library = flr_;
   params.slice_reader_cache = &slice_reader_cache_;
   params.rendezvous = rendez_;
@@ -328,7 +314,11 @@ Status KernelAndDeviceOp::Run(ScopedStepContainer* step_container,
     const string& op_name = kernel_->name();
     // 'ScopedActivity' will trace the OpKernel scheduling time on host.
     profiler::TraceMe activity(
-        [&] { return absl::StrCat(op_name, ":", kernel_->type_string()); },
+        [&] {
+          return absl::StrCat(op_name, ":", kernel_->type_string(), "#id=",
+                              step_container ? step_container->step_id() : 0,
+                              ",device=", device_->name(), ",async=false#");
+        },
         profiler::TraceMeLevel::kInfo);
     // 'ScopedAnnotation' will trace the OpKernel execution time on device.
     tracing::ScopedAnnotation annotation(
@@ -398,10 +388,7 @@ Status KernelAndDeviceFunc::Run(
   }
   {
     profiler::TraceMe activity(
-        [&] {
-          return absl::StrCat("FunctionRun#name=", name(), ",id=", opts.step_id,
-                              "#");
-        },
+        [&] { return absl::StrCat("FunctionRun:", name()); },
         profiler::TraceMeLevel::kInfo);
     pflr_->Run(opts, handle_, input_vector, outputs,
                [&status, &done](const Status& s) {

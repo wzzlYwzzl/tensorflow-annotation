@@ -63,7 +63,7 @@ class PyRecordReader {
   uint64 offset_;
   RandomAccessFile* file_;    // Owned
   io::RecordReader* reader_;  // Owned
-  tstring record_;
+  string record_;
   TF_DISALLOW_COPY_AND_ASSIGN(PyRecordReader);
 };
 

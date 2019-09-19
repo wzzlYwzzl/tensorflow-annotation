@@ -1,3 +1,4 @@
+# -*- Python -*-
 """SYCL autoconfiguration.
 `sycl_configure` depends on the following environment variables:
 

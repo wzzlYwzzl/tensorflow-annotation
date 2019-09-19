@@ -170,7 +170,8 @@ class _WishartLinearOperator(distribution.Distribution):
         allow_nan_stats=allow_nan_stats,
         reparameterization_type=distribution.FULLY_REPARAMETERIZED,
         parameters=parameters,
-        graph_parents=[self._df, self._dimension],
+        graph_parents=([self._df, self._dimension] +
+                       self._scale_operator.graph_parents),
         name=name)
 
   @property

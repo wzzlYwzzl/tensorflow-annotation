@@ -140,28 +140,12 @@ StatusOr<ElementsAttr> ConvertTensorProto(const TensorProto& input_tensor,
   return ConvertTensor(t, builder);
 }
 
-void ConvertToTensorShapeProto(ArrayRef<int64_t> shape,
-                               TensorShapeProto* output_shape) {
+Status ConvertToTensorShapeProto(ArrayRef<int64_t> shape,
+                                 TensorShapeProto* output_shape) {
   for (auto d : shape) {
     output_shape->add_dim()->set_size(d);
   }
-}
-
-PartialTensorShape ConvertTypeToTensorShape(const mlir::Type& type) {
-  if (type.isa<mlir::UnrankedTensorType>()) {
-    // An empty PartialTensorShape indicates an unranked tensor.
-    return PartialTensorShape();
-  }
-
-  if (auto tensor_type = type.dyn_cast<mlir::RankedTensorType>()) {
-    TensorShapeProto tensor_shape_proto;
-    ConvertToTensorShapeProto(tensor_type.getShape(), &tensor_shape_proto);
-    return PartialTensorShape(tensor_shape_proto);
-  }
-
-  // If type is not a RankedTensor or UnrankedTensor, it must be a scalar.
-  // Empty TensorShape indicates a scalar.
-  return TensorShape();
+  return Status::OK();
 }
 
 // Converts an MLIR opaque elements attribute to a TensorFlow tensor proto.
@@ -180,28 +164,8 @@ Status ConvertOpaqueElementsAttr(const ElementsAttr attr,
 Status ConvertFloatElementsAttr(const ElementsAttr attr,
                                 TensorProto* output_tensor) {
   if (auto elts = attr.dyn_cast<DenseFPElementsAttr>()) {
-    if (elts.isSplat()) {
-      output_tensor->add_float_val(elts.getSplatValue<float>());
-    } else {
-      for (auto value : elts.getValues<float>())
-        output_tensor->add_float_val(value);
-    }
-    return Status::OK();
-  }
-  return ConvertOpaqueElementsAttr(attr, output_tensor);
-}
-
-// Converts an MLIR elements attribute to a TensorFlow tensor proto
-// with the half_val field updated.
-Status ConvertHalfElementsAttr(const ElementsAttr attr,
-                               TensorProto* output_tensor) {
-  if (auto elts = attr.dyn_cast<DenseFPElementsAttr>()) {
-    if (elts.isSplat()) {
-      output_tensor->add_half_val(
-          (*elts.begin()).bitcastToAPInt().getSExtValue());
-    } else {
-      for (auto value : elts.getFloatValues())
-        output_tensor->add_half_val(value.bitcastToAPInt().getSExtValue());
+    for (auto value : elts.getValues<float>()) {
+      output_tensor->add_float_val(value);
     }
     return Status::OK();
   }
@@ -213,10 +177,8 @@ Status ConvertHalfElementsAttr(const ElementsAttr attr,
 Status ConvertIntElementsAttr(const mlir::ElementsAttr attr,
                               TensorProto* output_tensor) {
   if (auto elts = attr.dyn_cast<DenseIntElementsAttr>()) {
-    if (elts.isSplat()) {
-      output_tensor->add_int_val((*elts.begin()).getSExtValue());
-    } else {
-      for (auto val : elts) output_tensor->add_int_val(val.getSExtValue());
+    for (auto val : elts) {
+      output_tensor->add_int_val(val.getSExtValue());
     }
     return Status::OK();
   }
@@ -228,10 +190,8 @@ Status ConvertIntElementsAttr(const mlir::ElementsAttr attr,
 Status ConvertInt64ElementsAttr(const mlir::ElementsAttr attr,
                                 TensorProto* output_tensor) {
   if (auto elts = attr.dyn_cast<DenseIntElementsAttr>()) {
-    if (elts.isSplat()) {
-      output_tensor->add_int64_val((*elts.begin()).getSExtValue());
-    } else {
-      for (auto val : elts) output_tensor->add_int64_val(val.getSExtValue());
+    for (auto val : elts) {
+      output_tensor->add_int64_val(val.getSExtValue());
     }
     return Status::OK();
   }
@@ -258,14 +218,12 @@ Status ConvertToTensorProto(const ElementsAttr attr,
   DataType output_dtype;
   TF_RETURN_IF_ERROR(ConvertToDataType(type, &output_dtype));
   output_tensor->set_dtype(output_dtype);
-  ConvertToTensorShapeProto(shape, output_tensor->mutable_tensor_shape());
+  TF_RETURN_IF_ERROR(
+      ConvertToTensorShapeProto(shape, output_tensor->mutable_tensor_shape()));
 
   switch (output_dtype) {
     case DT_FLOAT:
       return ConvertFloatElementsAttr(attr, output_tensor);
-    case DT_HALF:
-      // Handles both DenseFPElementsAttr and OpaqueElementsAttr.
-      return ConvertHalfElementsAttr(attr, output_tensor);
     case DT_QUINT8:
     case DT_UINT8:
     case DT_INT8:

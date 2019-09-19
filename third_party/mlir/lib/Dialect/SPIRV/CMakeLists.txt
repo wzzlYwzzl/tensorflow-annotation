@@ -10,8 +10,7 @@ add_llvm_library(MLIRSPIRV
 
 add_dependencies(MLIRSPIRV
   MLIRSPIRVOpsIncGen
-  MLIRSPIRVIntEnumsIncGen
-  MLIRSPIRVBitEnumsIncGen
+  MLIRSPIRVEnumsIncGen
   MLIRSPIRVOpUtilsGen)
 
 target_link_libraries(MLIRSPIRV

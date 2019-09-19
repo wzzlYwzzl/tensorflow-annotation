@@ -14,7 +14,6 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/core/grappler/op_types.h"
-
 #include "tensorflow/core/framework/attr_value.pb.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/types.h"
@@ -959,8 +958,6 @@ bool NeverForwardsInputs(const NodeDef& node) {
          absl::StrContains(op_name, "Segment") ||
          absl::StartsWith(op_name, "Quantize");
 }
-
-bool IsXlaLaunch(const NodeDef& node) { return node.op() == "XlaLaunch"; }
 
 }  // namespace grappler
 }  // end namespace tensorflow

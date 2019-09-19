@@ -19,7 +19,6 @@ from __future__ import division
 from __future__ import print_function
 
 from tensorflow.python import tf2
-from tensorflow.python.data.ops import dataset_ops
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.ops import control_flow_v2_toggles
@@ -40,9 +39,6 @@ def enable_v2_behavior():
   This function is called in the main TensorFlow `__init__.py` file, user should
   not need to call it, except during complex migrations.
   """
-  # TF2 behavior is enabled if either 1) enable_v2_behavior() is called or
-  # 2) the TF2_BEHAVIOR=1 environment variable is set.  In the latter case,
-  # the modules below independently check if tf2.enabled().
   tf2.enable()
   ops.enable_eager_execution()
   tensor_shape.enable_v2_tensorshape()  # Also switched by tf2
@@ -50,8 +46,6 @@ def enable_v2_behavior():
   ops.enable_tensor_equality()
   # Enables TensorArrayV2 and control flow V2.
   control_flow_v2_toggles.enable_control_flow_v2()
-  # Make sure internal uses of the `dataset_ops.Dataset` map to DatasetV2.
-  dataset_ops.Dataset = dataset_ops.DatasetV2
 
 
 @tf_export(v1=["disable_v2_behavior"])
@@ -72,5 +66,3 @@ def disable_v2_behavior():
   ops.disable_tensor_equality()
   # Disables TensorArrayV2 and control flow V2.
   control_flow_v2_toggles.disable_control_flow_v2()
-  # Make sure internal uses of the `dataset_ops.Dataset` map to DatasetV1.
-  dataset_ops.Dataset = dataset_ops.DatasetV1

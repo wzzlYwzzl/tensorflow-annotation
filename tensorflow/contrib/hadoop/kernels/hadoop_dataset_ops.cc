@@ -31,13 +31,12 @@ class SequenceFileReader {
             new io::BufferedInputStream(file, kSequenceFileBufferSize)) {}
 
   Status ReadHeader() {
-    tstring version;
+    string version;
     TF_RETURN_IF_ERROR(input_stream_->ReadNBytes(4, &version));
-    StringPiece version_view(version);
-    if (version_view.substr(0, 3) != "SEQ" || version[3] != 6) {
+    if (version.substr(0, 3) != "SEQ" || version[3] != 6) {
       return errors::InvalidArgument(
           "sequence file header must starts with `SEQ6`, received \"",
-          version_view.substr(0, 3), static_cast<int>(version[3]), "\"");
+          version.substr(0, 3), static_cast<int>(version[3]), "\"");
     }
     TF_RETURN_IF_ERROR(ReadString(&key_class_name_));
     TF_RETURN_IF_ERROR(ReadString(&value_class_name_));
@@ -51,7 +50,7 @@ class SequenceFileReader {
                                    "' is currently not supported");
     }
 
-    tstring buffer;
+    string buffer;
     TF_RETURN_IF_ERROR(input_stream_->ReadNBytes(2, &buffer));
     compression_ = buffer[0];
     block_compression_ = buffer[1];
@@ -85,12 +84,12 @@ class SequenceFileReader {
     return Status::OK();
   }
 
-  Status ReadRecord(tstring* key, tstring* value) {
+  Status ReadRecord(string* key, string* value) {
     uint32 length = 0;
     TF_RETURN_IF_ERROR(ReadUInt32(&length));
     if (length == static_cast<uint32>(-1)) {
       // Sync marker.
-      tstring sync_marker;
+      string sync_marker;
       TF_RETURN_IF_ERROR(
           input_stream_->ReadNBytes(kSyncMarkerSize, &sync_marker));
       if (sync_marker != sync_marker_) {
@@ -115,7 +114,7 @@ class SequenceFileReader {
     return Status::OK();
   }
 
-  Status ReadString(tstring* value) {
+  Status ReadString(string* value) {
     int64 length = 0;
     TF_RETURN_IF_ERROR(ReadVInt(&length));
     if (value == nullptr) {
@@ -125,7 +124,7 @@ class SequenceFileReader {
   }
 
   Status ReadUInt32(uint32* value) {
-    tstring buffer;
+    string buffer;
     TF_RETURN_IF_ERROR(input_stream_->ReadNBytes(4, &buffer));
     *value = ((static_cast<uint32>(buffer[0]) << 24) |
               static_cast<uint32>(buffer[1]) << 16) |
@@ -135,7 +134,7 @@ class SequenceFileReader {
   }
 
   Status ReadVInt(int64* value) {
-    tstring buffer;
+    string buffer;
     TF_RETURN_IF_ERROR(input_stream_->ReadNBytes(1, &buffer));
     if (buffer[0] >= -112) {
       *value = static_cast<int64>(buffer[0]);
@@ -168,12 +167,12 @@ class SequenceFileReader {
 
  private:
   std::unique_ptr<io::InputStreamInterface> input_stream_;
-  tstring key_class_name_;
-  tstring value_class_name_;
-  tstring sync_marker_;
+  string key_class_name_;
+  string value_class_name_;
+  string sync_marker_;
   bool compression_;
   bool block_compression_;
-  tstring compression_codec_class_name_;
+  string compression_codec_class_name_;
   TF_DISALLOW_COPY_AND_ASSIGN(SequenceFileReader);
 };
 class SequenceFileDatasetOp : public DatasetOpKernel {
@@ -199,7 +198,7 @@ class SequenceFileDatasetOp : public DatasetOpKernel {
     std::vector<string> filenames;
     filenames.reserve(filenames_tensor->NumElements());
     for (int i = 0; i < filenames_tensor->NumElements(); ++i) {
-      filenames.push_back(filenames_tensor->flat<tstring>()(i));
+      filenames.push_back(filenames_tensor->flat<string>()(i));
     }
 
     *output = new Dataset(ctx, filenames, output_types_);
@@ -234,7 +233,7 @@ class SequenceFileDatasetOp : public DatasetOpKernel {
       return "SequenceFileDatasetOp::Dataset";
     }
 
-    Status CheckExternalState() const override { return Status::OK(); }
+    bool IsStateful() const override { return false; }
 
    protected:
     Status AsGraphDefInternal(SerializationContext* ctx,
@@ -259,17 +258,17 @@ class SequenceFileDatasetOp : public DatasetOpKernel {
         do {
           // We are currently processing a file, so try to read the next record.
           if (reader_) {
-            tstring key, value;
+            string key, value;
             Status status = reader_->ReadRecord(&key, &value);
             if (!errors::IsOutOfRange(status)) {
               TF_RETURN_IF_ERROR(status);
 
               Tensor key_tensor(ctx->allocator({}), DT_STRING, {});
-              key_tensor.scalar<tstring>()() = std::move(key);
+              key_tensor.scalar<string>()() = key;
               out_tensors->emplace_back(std::move(key_tensor));
 
               Tensor value_tensor(ctx->allocator({}), DT_STRING, {});
-              value_tensor.scalar<tstring>()() = std::move(value);
+              value_tensor.scalar<string>()() = value;
               out_tensors->emplace_back(std::move(value_tensor));
 
               *end_of_sequence = false;

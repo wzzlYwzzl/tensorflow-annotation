@@ -22,7 +22,7 @@ from tensorflow.python.ops import gen_collective_ops
 
 
 def all_reduce(t, group_size, group_key, instance_key, merge_op, final_op,
-               subdiv_offsets=(0,), communication_hint='auto'):
+               subdiv_offsets=(0,)):
   """Reduces tensors collectively, across devices.
 
   Args:
@@ -38,9 +38,6 @@ def all_reduce(t, group_size, group_key, instance_key, merge_op, final_op,
     subdiv_offsets: a list of integer offsets into the tensor at which each
       independent subdivision should begin.  Use [0] if no subdivision should
       be done.
-    communication_hint: preferred collective communication.  The implementation
-      may fall back to another mechanism.  Options include `auto`, `ring`, and
-      `nccl`.
 
   Returns:
     An Op implementing the distributed reduction.
@@ -52,19 +49,16 @@ def all_reduce(t, group_size, group_key, instance_key, merge_op, final_op,
     raise ValueError('Device assignment required for collective ops')
   if group_size <= 1:
     raise ValueError('Parameter group_size to all_reduce must be at least 2.')
-  return gen_collective_ops.collective_reduce(
-      t,
-      group_size=group_size,
-      group_key=group_key,
-      instance_key=instance_key,
-      merge_op=merge_op,
-      final_op=final_op,
-      subdiv_offsets=subdiv_offsets,
-      communication_hint=communication_hint.lower())
+  return gen_collective_ops.collective_reduce(t,
+                                              group_size=group_size,
+                                              group_key=group_key,
+                                              instance_key=instance_key,
+                                              merge_op=merge_op,
+                                              final_op=final_op,
+                                              subdiv_offsets=subdiv_offsets)
 
 
-def all_gather(t, group_size, group_key, instance_key,
-               communication_hint='auto'):
+def all_gather(t, group_size, group_key, instance_key):
   """Accumulates tensors collectively, across devices, along first dimension.
 
   Args:
@@ -73,9 +67,6 @@ def all_gather(t, group_size, group_key, instance_key,
       Each must reside on a different device.
     group_key: an integer identifying the group of devices.
     instance_key: an integer identifying the participating group of Ops.
-    communication_hint: preferred collective communication.  The implementation
-      may fall back to another mechanism.  Options include `auto`, `ring`, and
-      `nccl`.
 
   Returns:
     An Op implementing the distributed operation.
@@ -92,12 +83,10 @@ def all_gather(t, group_size, group_key, instance_key,
       shape=[0],
       group_size=group_size,
       group_key=group_key,
-      instance_key=instance_key,
-      communication_hint=communication_hint.lower())
+      instance_key=instance_key)
 
 
-def broadcast_send(t, shape, dtype, group_size, group_key, instance_key,
-                   communication_hint='auto'):
+def broadcast_send(t, shape, dtype, group_size, group_key, instance_key):
   """Broadcasts one tensor to a group of others, across devices.
 
   Args:
@@ -109,9 +98,6 @@ def broadcast_send(t, shape, dtype, group_size, group_key, instance_key,
       different device.
     group_key: an integer identifying the group of devices.
     instance_key: an integer identifying the participating group of Ops.
-    communication_hint: preferred collective communication.  The implementation
-      may fall back to another mechanism.  Options include `auto`, `ring`, and
-      `nccl`.
 
   Returns:
     An Op implementing the distributed broadcast send.
@@ -140,17 +126,14 @@ def broadcast_send(t, shape, dtype, group_size, group_key, instance_key,
   if t.dtype != dtype:
     raise ValueError(
         'Type of broadcast_send tensor not equal to declared type')
-  return gen_collective_ops.collective_bcast_send(
-      t,
-      shape=shape,
-      group_size=group_size,
-      group_key=group_key,
-      instance_key=instance_key,
-      communication_hint=communication_hint.lower())
+  return gen_collective_ops.collective_bcast_send(t,
+                                                  shape=shape,
+                                                  group_size=group_size,
+                                                  group_key=group_key,
+                                                  instance_key=instance_key)
 
 
-def broadcast_recv(shape, dtype, group_size, group_key, instance_key,
-                   communication_hint='auto'):
+def broadcast_recv(shape, dtype, group_size, group_key, instance_key):
   """Receives a broadcasts tensor, across devices.
 
   Args:
@@ -161,9 +144,6 @@ def broadcast_recv(shape, dtype, group_size, group_key, instance_key,
       different device.
     group_key: an integer identifying the group of devices.
     instance_key: an integer identifying the participating group of Ops.
-    communication_hint: preferred collective communication.  The implementation
-      may fall back to another mechanism.  Options include `auto`, `ring`, and
-      `nccl`.
 
   Returns:
     An Op implementing the broadcast receive.
@@ -174,10 +154,8 @@ def broadcast_recv(shape, dtype, group_size, group_key, instance_key,
   if group_size <= 1:
     raise ValueError(
         'Parameter group_size to broadcast_send must be at least 2.')
-  return gen_collective_ops.collective_bcast_recv(
-      shape=shape,
-      T=dtype,
-      group_size=group_size,
-      group_key=group_key,
-      instance_key=instance_key,
-      communication_hint=communication_hint.lower())
+  return gen_collective_ops.collective_bcast_recv(shape=shape,
+                                                  T=dtype,
+                                                  group_size=group_size,
+                                                  group_key=group_key,
+                                                  instance_key=instance_key)

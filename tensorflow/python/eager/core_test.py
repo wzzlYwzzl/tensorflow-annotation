@@ -341,6 +341,16 @@ class TFETest(test_util.TensorFlowTestCase):
     ctx.execution_mode = context.SYNC
     self.assertEqual(context.SYNC, ctx.execution_mode)
 
+    self.assertIsNone(ctx.summary_writer)
+    ctx.summary_writer = 'mock'
+    self.assertEqual('mock', ctx.summary_writer)
+    self.assertIsNone(ctx.summary_recording)
+    ctx.summary_recording = 'mock'
+    self.assertEqual('mock', ctx.summary_recording)
+    self.assertIsNone(ctx.summary_step)
+    ctx.summary_step = 'mock'
+    self.assertEqual('mock', ctx.summary_step)
+
     self.assertEqual('', ctx.device_name)
     self.assertEqual(ctx.device_name, ctx.device_spec.to_string())
     with ctx.device('GPU:0'):
@@ -369,6 +379,19 @@ class TFETest(test_util.TensorFlowTestCase):
       has_cpu_device = has_cpu_device or 'CPU' in x
     self.assertTrue(has_cpu_device)
     del ctx
+
+  def testRunMetadata(self):
+    context.enable_run_metadata()
+    t = constant_op.constant(1.0)
+    _ = t + t  # Runs an operation which will be in the RunMetadata
+    run_metadata = context.export_run_metadata()
+    context.disable_run_metadata()
+    step_stats = run_metadata.step_stats
+    self.assertGreater(len(step_stats.dev_stats), 0)
+    cpu_stats = step_stats.dev_stats[0]
+    self.assertEqual('/job:localhost/replica:0/task:0/device:CPU:0',
+                     cpu_stats.device)
+    self.assertGreaterEqual(len(cpu_stats.node_stats), 1)
 
   def testMultiCpuPlacement(self):
     with ops.device('cpu:1'):
@@ -424,6 +447,9 @@ class TFETest(test_util.TensorFlowTestCase):
       return [
           ctx.executing_eagerly(),
           ctx.scope_name,
+          ctx.summary_writer,
+          ctx.summary_recording,
+          ctx.summary_step,
           ctx.device_name,
           ctx.num_gpus()
       ]
@@ -522,13 +548,13 @@ class TFETest(test_util.TensorFlowTestCase):
       x = x.gpu()
       x = x.gpu()
       x = x.cpu()
-      context.context().executor.wait()
+      context.async_wait()
 
     # Invalid device
     with self.assertRaises(RuntimeError):
       x.gpu(context.context().num_gpus() + 1)
-      context.context().executor.wait()
-    context.context().executor.clear_error()
+      context.async_wait()
+    context.async_clear_error()
 
   @test_util.run_gpu_only
   def testCopyScope(self):
@@ -560,7 +586,7 @@ class TFETest(test_util.TensorFlowTestCase):
     def test_fn(v):
       return script_ops.eager_py_func(simple_fn, [v], dtypes.float32)
 
-    async_executor = executor.new_executor(enable_async=True)
+    async_executor = executor.Executor(enable_async=True)
     with context.executor_scope(async_executor):
       test_var = variables.Variable(2.)
       self.assertAllEqual(test_fn(test_var), 3.0)
@@ -614,8 +640,8 @@ class TFETest(test_util.TensorFlowTestCase):
           inputs=[three, five],
           attrs=('transpose_a', False, 'transpose_b', False, 'T',
                  three.dtype.as_datatype_enum))
-      context.context().executor.wait()
-    context.context().executor.clear_error()
+      context.async_wait()
+    context.async_clear_error()
     context.context().execution_mode = context.SYNC
 
   def testExecuteTooManyNumOutputs(self):

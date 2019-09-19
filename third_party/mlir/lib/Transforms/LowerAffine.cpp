@@ -21,15 +21,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Transforms/LowerAffine.h"
-#include "mlir/Dialect/AffineOps/AffineOps.h"
+#include "mlir/AffineOps/AffineOps.h"
 #include "mlir/Dialect/LoopOps/LoopOps.h"
-#include "mlir/Dialect/StandardOps/Ops.h"
 #include "mlir/IR/AffineExprVisitor.h"
 #include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/StandardOps/Ops.h"
 #include "mlir/Support/Functional.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/Passes.h"
@@ -403,7 +403,7 @@ public:
   virtual PatternMatchResult
   matchAndRewrite(AffineLoadOp op, PatternRewriter &rewriter) const override {
     // Expand affine map from 'affineLoadOp'.
-    SmallVector<Value *, 8> indices(op.getMapOperands());
+    SmallVector<Value *, 8> indices(op.getIndices());
     auto maybeExpandedMap =
         expandAffineMap(rewriter, op.getLoc(), op.getAffineMap(), indices);
     if (!maybeExpandedMap)
@@ -425,7 +425,7 @@ public:
   virtual PatternMatchResult
   matchAndRewrite(AffineStoreOp op, PatternRewriter &rewriter) const override {
     // Expand affine map from 'affineStoreOp'.
-    SmallVector<Value *, 8> indices(op.getMapOperands());
+    SmallVector<Value *, 8> indices(op.getIndices());
     auto maybeExpandedMap =
         expandAffineMap(rewriter, op.getLoc(), op.getAffineMap(), indices);
     if (!maybeExpandedMap)
@@ -521,7 +521,8 @@ class LowerAffinePass : public FunctionPass<LowerAffinePass> {
     populateAffineToStdConversionPatterns(patterns, &getContext());
     ConversionTarget target(getContext());
     target.addLegalDialect<loop::LoopOpsDialect, StandardOpsDialect>();
-    if (failed(applyPartialConversion(getFunction(), target, patterns)))
+    if (failed(
+            applyPartialConversion(getFunction(), target, std::move(patterns))))
       signalPassFailure();
   }
 };
@@ -529,8 +530,8 @@ class LowerAffinePass : public FunctionPass<LowerAffinePass> {
 
 /// Lowers If and For operations within a function into their lower level CFG
 /// equivalent blocks.
-std::unique_ptr<OpPassBase<FuncOp>> mlir::createLowerAffinePass() {
-  return std::make_unique<LowerAffinePass>();
+FunctionPassBase *mlir::createLowerAffinePass() {
+  return new LowerAffinePass();
 }
 
 static PassRegistration<LowerAffinePass>

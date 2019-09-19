@@ -19,18 +19,15 @@ from __future__ import print_function
 
 import os
 
-from absl.testing import parameterized
-
 from tensorflow.python.data.experimental.ops import iterator_ops as contrib_iterator_ops
 from tensorflow.python.data.ops import dataset_ops
-from tensorflow.python.framework import combinations
 from tensorflow.python.framework import errors
 from tensorflow.python.framework import ops
 from tensorflow.python.platform import test
 from tensorflow.python.training import saver as saver_lib
 
 
-class SerializationIntegrationTest(test.TestCase, parameterized.TestCase):
+class SerializationIntegrationTest(test.TestCase):
 
   def _build_input_pipeline(self, name, num_outputs):
     with ops.name_scope(name):
@@ -55,8 +52,6 @@ class SerializationIntegrationTest(test.TestCase, parameterized.TestCase):
   def _ckpt_path(self):
     return os.path.join(self.get_temp_dir(), "iterator")
 
-  @combinations.generate(
-      combinations.combine(tf_api_version=1, mode=["graph"]))
   def testConcurrentSaves(self):
     num_pipelines = 100
     num_outputs = 100
@@ -87,8 +82,6 @@ class SerializationIntegrationTest(test.TestCase, parameterized.TestCase):
     for output in all_outputs:
       self.assertSequenceEqual(sorted(output), range(num_outputs))
 
-  @combinations.generate(
-      combinations.combine(tf_api_version=1, mode=["graph"]))
   def testUninitializedIterator(self):
     num_pipelines = 1
     num_outputs = 1

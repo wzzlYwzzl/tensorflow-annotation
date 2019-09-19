@@ -473,12 +473,10 @@ class MklLayoutRewritePass : public GraphOptimizationPass {
         {csinfo_.fused_batch_norm_grad_v3,
          mkl_op_registry::GetMklOpName(csinfo_.fused_batch_norm_grad_v3),
          CopyAttrsAll, AlwaysRewrite, kRewriteForLayoutPropagation});
-#endif  // !ENABLE_MKLDNN_V1
 
     rinfo_.push_back({csinfo_.fused_conv2d, csinfo_.mkl_fused_conv2d,
                       CopyAttrsFusedConv2D, FusedConv2DRewrite,
                       kRewriteForLayoutPropagation});
-#ifndef ENABLE_MKLDNN_V1
     rinfo_.push_back({csinfo_.identity,
                       mkl_op_registry::GetMklOpName(csinfo_.identity),
                       CopyAttrsAll, RewriteIfAtleastOneMklInput,
@@ -1528,7 +1526,7 @@ rinfo_.push_back({csinfo_.tanh_grad,
     DCHECK(n);
 
     float alpha;
-    bool has_attr = TryGetNodeAttr(n->def(), "alpha", &alpha);
+    bool has_attr = GetNodeAttrSimple(n->def(), "alpha", &alpha);
     DCHECK(has_attr);
 
     // If the alpha of LeakyRelu is less than 1, rewrite the node.
@@ -1547,27 +1545,10 @@ rinfo_.push_back({csinfo_.tanh_grad,
     DCHECK(n);
     Node* filter_node = nullptr;
     TF_CHECK_OK(n->input_node(0, &filter_node));
-    bool narrow_range = false;
-    int axis = -1;
     string mode_string;
     string round_mode_string;
-    TryGetNodeAttr(n->def(), "narrow_range", &narrow_range);
-    TryGetNodeAttr(n->def(), "axis", &axis);
     TF_CHECK_OK(GetNodeAttr(n->def(), "mode", &mode_string));
     TF_CHECK_OK(GetNodeAttr(n->def(), "round_mode", &round_mode_string));
-    if (narrow_range) {
-      VLOG(1) << "QuantizeOpRewrite: narrow range is enabled for quantization."
-              << "This case is not optimized by Intel MKL, "
-              << "thus using Eigen op for Quantize op ";
-      return false;
-    }
-    if (axis != -1) {
-      VLOG(1) << "QuantizeOpRewrite: dimension is specified for "
-              << "per slice quantization."
-              << "This case is not optimized by Intel MKL, "
-              << "thus using Eigen op for Quantize op ";
-      return false;
-    }
     if (mode_string != "SCALED" || round_mode_string != "HALF_TO_EVEN") {
       VLOG(1) << "QuantizeOpRewrite: Mode is not SCALED and/or"
               << "rounding mode is not HALF_TO_EVEN. "
@@ -1608,7 +1589,7 @@ rinfo_.push_back({csinfo_.tanh_grad,
     // together with Conv2D (ex. batchnorm). We rewrite _FusedConv2D only if
     // it includes those we support.
     DataType T;
-    if (!TryGetNodeAttr(n->def(), "T", &T) ||
+    if (!GetNodeAttrSimple(n->def(), "T", &T) ||
         !mkl_op_registry::IsMklLayoutDependentOp(csinfo_.mkl_fused_conv2d, T)) {
       return false;
     }
@@ -1998,7 +1979,7 @@ void MklLayoutRewritePass::GetNodeProducingMklTensor(
 
   // If this is an MKL op, then it will create extra output for MKL layout.
   DataType T;
-  if (TryGetNodeAttr(n->def(), "T", &T) &&
+  if (GetNodeAttrSimple(n->def(), "T", &T) &&
       mkl_op_registry::IsMklLayoutDependentOp(n->type_string(), T)) {
     // If this is an MKL op, then it will generate an edge that will receive
     // Mkl tensor from a node.
@@ -3494,13 +3475,13 @@ MklLayoutRewritePass::CheckForQuantizedNodeRewrite(const Node* n) const {
   DataType Tinput, Tfilter;
   bool type_attrs_present = false;
 
-  if (TryGetNodeAttr(n->def(), "Tinput", &Tinput) &&
-      TryGetNodeAttr(n->def(), "Tfilter", &Tfilter) &&
+  if (GetNodeAttrSimple(n->def(), "Tinput", &Tinput) &&
+      GetNodeAttrSimple(n->def(), "Tfilter", &Tfilter) &&
       mkl_op_registry::IsMklLayoutDependentOp(
           mkl_op_registry::GetMklOpName(n->type_string()), Tinput, Tfilter)) {
     type_attrs_present = true;
-  } else if (TryGetNodeAttr(n->def(), "T1", &T1) &&
-             TryGetNodeAttr(n->def(), "T2", &T2) &&
+  } else if (GetNodeAttrSimple(n->def(), "T1", &T1) &&
+             GetNodeAttrSimple(n->def(), "T2", &T2) &&
              mkl_op_registry::IsMklLayoutDependentOp(
                  mkl_op_registry::GetMklOpName(n->type_string()), T1, T2)) {
     type_attrs_present = true;
@@ -3531,7 +3512,7 @@ MklLayoutRewritePass::CheckForNodeRewrite(const Node* n) const {
   // E.g., MklRelu does not support INT32. So we cannot rewrite Relu to
   // MklRelu if type is INT32.
   DataType T;
-  if (!TryGetNodeAttr(n->def(), "T", &T)) {
+  if (!GetNodeAttrSimple(n->def(), "T", &T)) {
     return nullptr;
   }
 
@@ -3746,7 +3727,7 @@ bool MklLayoutRewritePass::FixMklMetaDataEdges(std::unique_ptr<Graph>* g,
 
   // If graph node is not Mkl node, then return.
   DataType T = DT_INVALID;
-  if (!TryGetNodeAttr(n->def(), "T", &T) ||
+  if (!GetNodeAttrSimple(n->def(), "T", &T) ||
       !mkl_op_registry::IsMklLayoutDependentOp(n->type_string(), T)) {
     return result;
   }
@@ -3771,7 +3752,7 @@ bool MklLayoutRewritePass::FixMklMetaDataEdges(std::unique_ptr<Graph>* g,
     // Check that the source node for edge 'e' is Mkl node. If it is not an Mkl
     // node, then we don't need to do anything.
     Node* e_src = e->src();
-    if (TryGetNodeAttr(e_src->def(), "T", &T) &&
+    if (GetNodeAttrSimple(e_src->def(), "T", &T) &&
         mkl_op_registry::IsMklLayoutDependentOp(e_src->type_string(), T)) {
       // Source node for edge 'e' is Mkl node.
       // Destination node and destination input slot of e is node 'n' and 'idx'

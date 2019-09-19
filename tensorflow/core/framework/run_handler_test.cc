@@ -40,28 +40,34 @@ TEST(RunHandlerUtilTest, TestBasicScheduling) {
   std::unique_ptr<RunHandlerPool> pool(
       new RunHandlerPool(num_threads, num_threads));
 
-  // RunHandler should always be able to run num_threads inter closures
-  absl::Barrier barrier(num_threads);
+  // RunHandler has 2 * num_threads (inter + intra) -
+  // all should be able to run concurrently.
+  absl::Barrier barrier1(num_threads);
+  absl::Barrier barrier2(num_threads);
 
   BlockingCounter counter(2 * num_handlers * num_threads);
 
   thread::ThreadPool test_pool(Env::Default(), "test", num_handlers);
   for (int i = 0; i < num_handlers; ++i) {
-    test_pool.Schedule([&counter, &barrier, &pool, i, num_threads]() {
-      auto handler = pool->Get(i);
+    test_pool.Schedule([&counter, &barrier1, &barrier2, &pool, i,
+                        num_threads]() {
+      auto handler = pool->Get();
       BlockingCounter local_counter(2 * num_threads);
       auto intra_thread_pool = handler->AsIntraThreadPoolInterface();
 
       for (int j = 0; j < num_threads; ++j) {
         handler->ScheduleInterOpClosure(
-            [&local_counter, &counter, &barrier, i]() {
+            [&local_counter, &counter, &barrier1, i]() {
               if (i == 2) {
-                barrier.Block();
+                barrier1.Block();
               }
               counter.DecrementCount();
               local_counter.DecrementCount();
             });
-        intra_thread_pool->Schedule([&local_counter, &counter]() {
+        intra_thread_pool->Schedule([&local_counter, &counter, &barrier2, i]() {
+          if (i == 9) {
+            barrier2.Block();
+          }
           counter.DecrementCount();
           local_counter.DecrementCount();
         });

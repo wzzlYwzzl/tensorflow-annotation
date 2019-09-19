@@ -60,18 +60,6 @@ class Backend(object):
     """Returns the number of devices known to the backend."""
 
   @abc.abstractmethod
-  def local_device_count(self):
-    """Returns the number of devices local to this host."""
-
-  @abc.abstractmethod
-  def devices(self):
-    """Returns a list of `device_count()` Device subclasses."""
-
-  @abc.abstractmethod
-  def host_id(self):
-    """Returns the integer ID of this host."""
-
-  @abc.abstractmethod
   def buffer_from_pyval(self, pyval, device=0):
     """Allocates a fresh buffer and populates it with `pyval`."""
 
@@ -105,16 +93,7 @@ class LocalBackend(Backend):
     self.client = client
 
   def device_count(self):
-    return self.client.device_count()
-
-  def local_device_count(self):
-    return self.client.local_device_count()
-
-  def devices(self):
-    return self.client.devices()
-
-  def host_id(self):
-    return self.client.host_id()
+    return self.client.DeviceCount()
 
   def buffer_from_pyval(self, pyval, device=0):
     return _xla.PyLocalBuffer.from_python(pyval, self.client, device)
@@ -130,18 +109,11 @@ class LocalBackend(Backend):
     options.debug_options.xla_cpu_fast_math_honor_infs = True
     options.debug_options.xla_cpu_fast_math_honor_nans = True
     options.debug_options.xla_cpu_fast_math_honor_division = True
-    options.debug_options.xla_cpu_fast_math_honor_functions = True
     options.debug_options.xla_gpu_enable_fast_min_max = False
     return _xla.LocalExecutable.Compile(c_computation,
                                         compile_options.argument_layouts,
                                         options, self.client,
                                         compile_options.device_assignment)
-
-  def serialize(self, executable):
-    return self.client.SerializeExecutable(executable)
-
-  def deserialize(self, serialized_executable):
-    return self.client.DeserializeExecutable(serialized_executable, self.client)
 
 
 xla_platform_names = {
@@ -486,9 +458,6 @@ def replica_count():
 def computation_count():
   '''Returns the number of computations per replica.'''
 """
-
-
-Device = _xla.Device
 
 
 class CompileOptions(object):
@@ -1476,31 +1445,12 @@ class ComputationBuilder(object):
         batch_group_count,
         precision_config=precision_config)
 
-  def Sort(self, operands, dimension=-1, comparator=None):
-    """Enqueues a sort operation onto the computation.
-
-    Args:
-      operands: either an XlaOp or a sequence of XlaOps to sort. All operands
-        must be arrays with the same dimensions.
-      dimension: the array dimension over which to sort.
-      comparator: a comparator XlaComputation. See the XLA operation semantics
-        for details.
-
-    Returns:
-      Either an XlaOp or a tuple of XlaOps (if `operands` was an XlaOp or
-      a tuple of XlaOps, respectively.)
-    """
-    operands = (
-        list(operands)
-        if isinstance(operands, collections.Sequence) else [operands])
-    return ops.Sort(self._builder, operands, dimension,
-                    comparator.computation if comparator else None)
+  def Sort(self, operand, dimension=-1):
+    """Enqueues a sort operation onto the computation."""
+    return ops.Sort(self._builder, [operand], dimension)
 
   def SortKeyVal(self, keys, values, dimension=-1):
-    """Enqueues a key-value sort operation onto the computation.
-
-    Deprecated. Use `Sort` instead.
-    """
+    """Enqueues a key-value sort operation onto the computation."""
     return ops.Sort(self._builder, [keys, values], dimension)
 
   def QR(self, a, full_matrices=True):
@@ -1534,28 +1484,11 @@ class ComputationBuilder(object):
     """Enqueues a singular value decomposition."""
     return self.Tuple(*ops.SVD(a))
 
-  def Gather(self,
-             a,
-             start_indices,
-             dimension_numbers,
-             slice_sizes,
-             indices_are_sorted=False):
-    """Enqueues a Gather operation onto the computation."""
-    return ops.Gather(a, start_indices, dimension_numbers, slice_sizes,
-                      indices_are_sorted)
-
-  def Scatter(self,
-              a,
-              scatter_indices,
-              updates,
-              update_computation,
-              dimension_numbers,
-              indices_are_sorted=False,
-              unique_indices=False):
+  def Scatter(self, a, scatter_indices, updates, update_computation,
+              dimension_numbers):
     """Enqueues a Scatter operation onto the computation."""
     return ops.Scatter(a, scatter_indices, updates,
-                       update_computation.computation, dimension_numbers,
-                       indices_are_sorted, unique_indices)
+                       update_computation.computation, dimension_numbers)
 
   def Fft(self, operand, fft_type, fft_lengths):
     """Enqueues a FFT operation onto the computation."""
@@ -1639,6 +1572,7 @@ _OTHER_OPS = [
     'CollectivePermute',
     'ConvertElementType',
     'Dot',
+    'Gather',
     'GetTupleElement',
     'ReducePrecision',
     'Rev',

@@ -419,7 +419,7 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   return port::Status::OK();
 }
 
-/* static */ port::Status GpuDriver::LaunchKernel(
+/* static */ bool GpuDriver::LaunchKernel(
     GpuContext* context, hipFunction_t function, unsigned int grid_dim_x,
     unsigned int grid_dim_y, unsigned int grid_dim_z, unsigned int block_dim_x,
     unsigned int block_dim_y, unsigned int block_dim_z,
@@ -434,18 +434,19 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
       function, grid_dim_x, grid_dim_y, grid_dim_z, block_dim_x, block_dim_y,
       block_dim_z, shared_mem_bytes, stream, kernel_params, extra);
   if (res != hipSuccess) {
-    return port::InternalError(
-        absl::StrCat("Failed to launch ROCM kernel: ", ToString(res)));
+    LOG(ERROR) << "failed to launch ROCM kernel: " << function
+               << "; result: " << ToString(res);
+    return false;
   }
   VLOG(2) << "successfully launched kernel";
-  return port::Status::OK();
+  return true;
 }
 
-/* static */ port::Status GpuDriver::LoadPtx(GpuContext* context,
-                                             const char* ptx_contents,
-                                             hipModule_t* module) {
+/* static */ bool GpuDriver::LoadPtx(GpuContext* context,
+                                     const char* ptx_contents,
+                                     hipModule_t* module) {
   LOG(ERROR) << "Feature not supported on ROCm platform (LoadPtx)";
-  return port::InternalError("Not Implemented");
+  return false;
 }
 
 /* static */ port::Status GpuDriver::LoadCubin(GpuContext* context,

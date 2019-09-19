@@ -101,9 +101,7 @@ class CacheDatasetOp::FileDataset : public DatasetBase {
 
   int64 Cardinality() const override { return input_->Cardinality(); }
 
-  Status CheckExternalState() const override {
-    return input_->CheckExternalState();
-  }
+  bool IsStateful() const override { return input_->IsStateful(); }
 
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
@@ -118,7 +116,7 @@ class CacheDatasetOp::FileDataset : public DatasetBase {
   }
 
   const DatasetBase* const input_;
-  const tstring filename_;
+  const string filename_;
 
  private:
   static size_t StringPaddingSize(size_t num_tensors) {
@@ -447,7 +445,7 @@ class CacheDatasetOp::FileDataset : public DatasetBase {
         // that the next call to `MakeIterator` can build a
         // `FileReaderIterator`.
         {
-          std::vector<tstring> prefixes;
+          std::vector<string> prefixes;
           prefixes.reserve(shard_id_ + 1);
           for (size_t i = 0; i <= shard_id_; ++i) {
             prefixes.emplace_back(
@@ -671,9 +669,7 @@ class CacheDatasetOp::MemoryDataset : public DatasetBase {
 
   int64 Cardinality() const override { return input_->Cardinality(); }
 
-  Status CheckExternalState() const override {
-    return input_->CheckExternalState();
-  }
+  bool IsStateful() const override { return input_->IsStateful(); }
 
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
@@ -682,7 +678,7 @@ class CacheDatasetOp::MemoryDataset : public DatasetBase {
     Node* input_node = nullptr;
     TF_RETURN_IF_ERROR(b->AddInputDataset(ctx, input_, &input_node));
     Node* filename_node = nullptr;
-    TF_RETURN_IF_ERROR(b->AddScalar(tstring(""), &filename_node));
+    TF_RETURN_IF_ERROR(b->AddScalar(string(""), &filename_node));
     TF_RETURN_IF_ERROR(
         b->AddDataset(this, {input_node, filename_node}, output));
     return Status::OK();
@@ -975,10 +971,7 @@ class CacheDatasetOp::MemoryDatasetV2 : public CacheDatasetOp::MemoryDataset {
                            MemoryCache* cache, const Tensor& resource_handle)
       : MemoryDataset(ctx, input, cache), resource_handle_(resource_handle) {}
 
-  Status CheckExternalState() const override {
-    return errors::FailedPrecondition(DebugString(),
-                                      " depends on memory cache resource.");
-  }
+  bool IsStateful() const override { return true; }
 
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
@@ -987,7 +980,7 @@ class CacheDatasetOp::MemoryDatasetV2 : public CacheDatasetOp::MemoryDataset {
     Node* input_node = nullptr;
     TF_RETURN_IF_ERROR(b->AddInputDataset(ctx, input_, &input_node));
     Node* filename_node = nullptr;
-    TF_RETURN_IF_ERROR(b->AddScalar(tstring(""), &filename_node));
+    TF_RETURN_IF_ERROR(b->AddScalar(string(""), &filename_node));
     Node* resource_handle_node = nullptr;
     TF_RETURN_IF_ERROR(b->AddTensor(resource_handle_, &resource_handle_node));
     TF_RETURN_IF_ERROR(b->AddDataset(
@@ -1006,8 +999,8 @@ CacheDatasetOp::CacheDatasetOp(OpKernelConstruction* ctx)
 void CacheDatasetOp::MakeDataset(OpKernelContext* ctx, DatasetBase* input,
                                  DatasetBase** output) {
   // Parse out the filenames tensor.
-  tstring filename;
-  OP_REQUIRES_OK(ctx, ParseScalarArgument<tstring>(ctx, kFileName, &filename));
+  string filename;
+  OP_REQUIRES_OK(ctx, ParseScalarArgument<string>(ctx, kFileName, &filename));
 
   if (filename.empty()) {
     if (op_version_ == 2) {

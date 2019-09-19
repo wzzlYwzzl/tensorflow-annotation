@@ -30,8 +30,6 @@ class _ObjectIdentityWrapper(object):
   _ListWrapper objects to object-identity collections.
   """
 
-  __slots__ = ["_wrapped"]
-
   def __init__(self, wrapped):
     self._wrapped = wrapped
 

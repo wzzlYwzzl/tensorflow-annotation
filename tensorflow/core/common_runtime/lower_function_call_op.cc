@@ -34,7 +34,7 @@ bool LowerAsMultiDeviceFunction(const Node* n) {
 
   bool match;
   bool found =
-      TryGetNodeAttr(n->attrs(), kLowerAsMultiDeviceFunctionAttr, &match);
+      GetNodeAttrSimple(n->attrs(), kLowerAsMultiDeviceFunctionAttr, &match);
   return found && match;
 }
 

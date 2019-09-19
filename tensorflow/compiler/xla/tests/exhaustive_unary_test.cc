@@ -13,9 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "tensorflow/compiler/xla/tests/client_library_test_base.h"
 #include "tensorflow/compiler/xla/tests/exhaustive_op_test_utils.h"
-#include "tensorflow/compiler/xla/util.h"
 
 #ifdef __FAST_MATH__
 #error "Can't be compiled with fast math on"
@@ -213,54 +211,15 @@ typedef Exhaustive32BitOrLessUnaryTest<F32> ExhaustiveF32UnaryTest;
 typedef Exhaustive32BitOrLessUnaryTest<F16> ExhaustiveF16UnaryTest;
 typedef Exhaustive32BitOrLessUnaryTest<BF16> ExhaustiveBF16UnaryTest;
 
-#if defined(UNARY_TEST_TARGET_F32_OR_SMALLER)
-#define NEED_UNARY_F32 true
-#if !defined(XLA_BACKEND_DOES_NOT_SUPPORT_FLOAT16)
-#define NEED_UNARY_F16 true
-#else
-#define NEED_UNARY_F16 false
-#endif
-#if defined(XLA_BACKEND_SUPPORTS_BFLOAT16)
-#define NEED_UNARY_BF16 true
-#else
-#define NEED_UNARY_BF16 false
-#endif
-#else
-#define NEED_UNARY_F32 false
-#define NEED_UNARY_F16 false
-#define NEED_UNARY_BF16 false
-#endif
-
-#if NEED_UNARY_F32
-#define UNARY_TEST_F32(test_name, ...)          \
-  XLA_TEST_P(ExhaustiveF32UnaryTest, test_name) \
+#define XLA_TEST_FLOAT_32_BITS_OR_LESS(test_name, ...) \
+  XLA_TEST_P(ExhaustiveF32UnaryTest, test_name)        \
+  __VA_ARGS__                                          \
+  XLA_TEST_P(ExhaustiveF16UnaryTest, test_name)        \
+  __VA_ARGS__                                          \
+  XLA_TEST_P(ExhaustiveBF16UnaryTest, test_name)       \
   __VA_ARGS__
-#else
-#define UNARY_TEST_F32(test_name, ...)
-#endif
 
-#if NEED_UNARY_F16
-#define UNARY_TEST_F16(test_name, ...)          \
-  XLA_TEST_P(ExhaustiveF16UnaryTest, test_name) \
-  __VA_ARGS__
-#else
-#define UNARY_TEST_F16(test_name, ...)
-#endif
-
-#if NEED_UNARY_BF16
-#define UNARY_TEST_BF16(test_name, ...)          \
-  XLA_TEST_P(ExhaustiveBF16UnaryTest, test_name) \
-  __VA_ARGS__
-#else
-#define UNARY_TEST_BF16(test_name, ...)
-#endif
-
-#define UNARY_TEST_FLOAT_32_BITS_OR_LESS(test_name, ...) \
-  UNARY_TEST_F32(test_name, __VA_ARGS__)                 \
-  UNARY_TEST_F16(test_name, __VA_ARGS__)                 \
-  UNARY_TEST_BF16(test_name, __VA_ARGS__)
-
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Log, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Log, {
   ErrorSpecGen error_spec_gen = GetDefaultSpecGenerator();
   if (platform_ != "Host" && platform_ != "CUDA" && ty_ == F32) {
     error_spec_gen = +[](NativeT x) { return ErrorSpec{0.001, 0.001}; };
@@ -268,7 +227,7 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Log, {
   Run(Log, std::log, error_spec_gen);
 })
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Log1p, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Log1p, {
   ErrorSpecGen error_spec_gen = GetDefaultSpecGenerator();
   if (platform_ != "Host" && platform_ != "CUDA" && ty_ == F32) {
     error_spec_gen = +[](NativeT x) { return ErrorSpec{0.001, 0.001}; };
@@ -276,7 +235,7 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Log1p, {
   Run(Log1p, std::log1p, error_spec_gen);
 })
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Exp, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Exp, {
   // When x < -105, the true value of exp(x) is smaller than the smallest F32,
   // so exp(x) should return exactly 0. We want our implementation of exp to
   // return exactly 0 as well, as not doing so implies either that our
@@ -307,7 +266,7 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Exp, {
   }
 })
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Expm1, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Expm1, {
   ErrorSpecGen error_spec_gen = GetDefaultSpecGenerator();
   if (ty_ == F32) {
     error_spec_gen = +[](NativeT x) { return ErrorSpec{0, 0.00015}; };
@@ -333,7 +292,7 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Expm1, {
 // It feels a little overkill to exhaustively test sqrt and pow(x, 0.5), but
 // this *did* find a bug, namely that some backends were assuming sqrt(x) ==
 // pow(x, 0.5), but this is not true for x == -inf.
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(PowOneHalf, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(PowOneHalf, {
   EvaluateOp fn = +[](float x) { return std::pow(x, 0.5f); };
   // TODO(b/123837116): Enable the test for all values after fixing the bug.
   if (platform_ != "Host" && platform_ != "CUDA") {
@@ -347,12 +306,12 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(PowOneHalf, {
   Run([](XlaOp x) { return Pow(x, ScalarLike(x, 0.5)); }, fn);
 })
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Rsqrt, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Rsqrt, {
   Run(
       Rsqrt, +[](float x) { return 1 / std::sqrt(x); });
 })
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Sqrt, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Sqrt, {
   ErrorSpecGen error_spec_gen = GetDefaultSpecGenerator();
   if (platform_ == "Host" || platform_ == "CUDA") {
     error_spec_gen = +[](NativeT x) {
@@ -390,11 +349,11 @@ XLA_TEST_P(ExhaustiveF32UnaryTest, Asinh) {
 XLA_TEST_P(ExhaustiveF16UnaryTest, Asinh) { Run(Asinh, std::asinh); }
 XLA_TEST_P(ExhaustiveBF16UnaryTest, Asinh) { Run(Asinh, std::asinh); }
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Atanh, { Run(Atanh, std::atanh); })
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Acos, { Run(Acos, std::acos); })
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Asin, { Run(Asin, std::asin); })
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Atanh, { Run(Atanh, std::atanh); })
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Acos, { Run(Acos, std::acos); })
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Asin, { Run(Asin, std::asin); })
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Cosh, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Cosh, {
   // Our cosh implementation incorrectly overflows to inf for +/-89.4159851.
   // The correct answer of 3.40281961e+38 (0x7f7fffec) is very close to
   // max-float, so we deem this acceptable.
@@ -415,7 +374,7 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Cosh, {
   Run(Cosh, host_cosh);
 })
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Sinh, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Sinh, {
   // Our sinh implementation incorrectly overflows to +/-inf for +/-89.4159851.
   // The correct answer of 3.40281961e+38 (0x7f7fffec) is very close to
   // max-float, so we deem this acceptable.
@@ -436,17 +395,7 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Sinh, {
   Run(Sinh, host_sinh);
 })
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Tanh, {
-  ErrorSpecGen error_spec_gen = GetDefaultSpecGenerator();
-  if (platform_ == "CUDA") {
-    error_spec_gen = +[](NativeT x) {
-      return x <= static_cast<NativeT>(-20.0) || x >= static_cast<NativeT>(20.0)
-                 ? ErrorSpec{0, 0}
-                 : GetDefaultSpecGenerator()(x);
-    };
-  }
-  Run(Tanh, std::tanh, error_spec_gen);
-})
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Tanh, { Run(Tanh, std::tanh); })
 
 template <PrimitiveType T>
 void Exhaustive32BitOrLessUnaryTest<T>::SetParamsForSinCosTan() {
@@ -470,68 +419,62 @@ void Exhaustive32BitOrLessUnaryTest<T>::SetParamsForSinCosTan() {
   }
 }
 
-UNARY_TEST_F32(Cos, {
+XLA_TEST_P(ExhaustiveF32UnaryTest, Cos) {
   SetParamsForSinCosTan();
   Run(
       Cos, std::cos, +[](NativeT) {
         return ErrorSpec{0.001, 0.001};
       });
-})
-
-UNARY_TEST_F16(Cos, {
+}
+XLA_TEST_P(ExhaustiveF16UnaryTest, Cos) {
   SetParamsForSinCosTan();
   Run(Cos, std::cos);
-})
-
-UNARY_TEST_BF16(Cos, {
+}
+XLA_TEST_P(ExhaustiveBF16UnaryTest, Cos) {
   SetParamsForSinCosTan();
   Run(Cos, std::cos);
-})
+}
 
-UNARY_TEST_F32(Sin, {
+XLA_TEST_P(ExhaustiveF32UnaryTest, Sin) {
   SetParamsForSinCosTan();
   Run(
       Sin, std::sin, +[](NativeT) {
         return ErrorSpec{0.001, 0.001};
       });
-})
-
-UNARY_TEST_F16(Sin, {
+}
+XLA_TEST_P(ExhaustiveF16UnaryTest, Sin) {
   SetParamsForSinCosTan();
   Run(Sin, std::sin);
-})
-
-UNARY_TEST_BF16(Sin, {
+}
+XLA_TEST_P(ExhaustiveBF16UnaryTest, Sin) {
   SetParamsForSinCosTan();
   Run(Sin, std::sin);
-})
+}
 
-UNARY_TEST_F32(Tan, {
+XLA_TEST_P(ExhaustiveF32UnaryTest, Tan) {
   SetParamsForSinCosTan();
   Run(
       Tan, std::tan, +[](NativeT) {
         return ErrorSpec{0.001, 0.001};
       });
-})
-
-UNARY_TEST_F16(Tan, {
+}
+XLA_TEST_P(ExhaustiveF16UnaryTest, Tan) {
   SetParamsForSinCosTan();
   Run(Tan, std::tan);
-})
-
-UNARY_TEST_BF16(Tan, {
+}
+XLA_TEST_P(ExhaustiveBF16UnaryTest, Tan) {
   SetParamsForSinCosTan();
   Run(Tan, std::tan);
-})
+}
 
 // TODO(jlebar): Enable these.
-// UNARY_TEST_FLOAT_32_BITS_OR_LESS(Atan) { Run(Atan, std::atan); }
-// UNARY_TEST_FLOAT_32_BITS_OR_LESS(Atan2) { Run(Atan2, std::atan2); }
+// XLA_TEST_FLOAT_32_BITS_OR_LESS(Atan) { Run(Atan, std::atan); }
+// XLA_TEST_FLOAT_32_BITS_OR_LESS(Atan2) { Run(Atan2, std::atan2); }
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Erf, { Run(Erf, std::erf); })
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Erfc, { Run(Erfc, std::erfc); })
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(ErfInv, { Run(ErfInv, HostErfInv); })
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Digamma, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Erf, { Run(Erf, std::erf); })
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Erfc, { Run(Erfc, std::erfc); })
+XLA_TEST_FLOAT_32_BITS_OR_LESS(ErfInv, { Run(ErfInv, HostErfInv); })
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Digamma, {
   ErrorSpecGen error_spec_gen = GetDefaultSpecGenerator();
   if (platform_ != "Host" && platform_ != "CUDA") {
     // TODO(b/123956399): This is a fairly high error, significantly higher than
@@ -561,7 +504,7 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Digamma, {
   }
 })
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Lgamma, {
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Lgamma, {
   // Our implementation gets within 0.0001 rel error except for ~20 denormal
   // inputs on GPU.  Anyway 0.001 rel error should be good enough for lgamma.
   ErrorSpecGen error_spec_gen = GetDefaultSpecGenerator();
@@ -592,7 +535,9 @@ UNARY_TEST_FLOAT_32_BITS_OR_LESS(Lgamma, {
   Run(Lgamma, host_lgamma, error_spec_gen);
 })
 
-UNARY_TEST_FLOAT_32_BITS_OR_LESS(Round, { Run(Round, std::round); })
+XLA_TEST_FLOAT_32_BITS_OR_LESS(Round, { Run(Round, std::round); })
+
+#if defined(UNARY_TEST_TARGET_F32_OR_SMALLER)
 
 INSTANTIATE_TEST_SUITE_P(F32, ExhaustiveF32UnaryTest,
                          ::testing::ValuesIn(CreateExhaustiveF32Ranges()));
@@ -605,6 +550,8 @@ INSTANTIATE_TEST_SUITE_P(F16, ExhaustiveF16UnaryTest,
 #if defined(XLA_BACKEND_SUPPORTS_BFLOAT16)
 INSTANTIATE_TEST_SUITE_P(BF16, ExhaustiveBF16UnaryTest,
                          ::testing::Values(std::make_pair(0, 1 << 16)));
+#endif
+
 #endif
 
 // Exhaustive test for unary operations for double.
@@ -637,78 +584,53 @@ class ExhaustiveF64UnaryTest : public ExhaustiveUnaryTest<F64>,
   }
 };
 
-#if defined(UNARY_TEST_TARGET_F64) && \
-    !defined(XLA_BACKEND_DOES_NOT_SUPPORT_FLOAT64)
-#define UNARY_TEST_FLOAT_64(test_name, ...)     \
-  XLA_TEST_P(ExhaustiveF64UnaryTest, test_name) \
-  __VA_ARGS__
-#else
-#define UNARY_TEST_FLOAT_64(test_name, ...)
-#endif
+XLA_TEST_P(ExhaustiveF64UnaryTest, Log) { Run(Log, std::log); }
 
-UNARY_TEST_FLOAT_64(Log, { Run(Log, std::log); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Log1p) { Run(Log1p, std::log1p); }
 
-UNARY_TEST_FLOAT_64(Log1p, { Run(Log1p, std::log1p); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Exp) { Run(Exp, std::exp); }
 
-UNARY_TEST_FLOAT_64(Exp, { Run(Exp, std::exp); })
-
-UNARY_TEST_FLOAT_64(Expm1, { Run(Expm1, std::expm1); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Expm1) { Run(Expm1, std::expm1); }
 
 // TODO(b/138385863): Turn on the test for GPU after fixing the bug.
-UNARY_TEST_FLOAT_64(DISABLED_ON_GPU(PowOneHalf), {
+XLA_TEST_P(ExhaustiveF64UnaryTest, DISABLED_ON_GPU(PowOneHalf)) {
   Run([](XlaOp x) { return Pow(x, ScalarLike(x, 0.5)); },
       +[](double x) { return std::pow(x, 0.5); });
-})
+}
 
-UNARY_TEST_FLOAT_64(Rsqrt, {
+XLA_TEST_P(ExhaustiveF64UnaryTest, Rsqrt) {
   Run(
       Rsqrt, +[](double x) { return 1 / std::sqrt(x); });
-})
+}
 
-UNARY_TEST_FLOAT_64(Sqrt, { Run(Sqrt, std::sqrt); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Sqrt) { Run(Sqrt, std::sqrt); }
 
-UNARY_TEST_FLOAT_64(Acosh, { Run(Acosh, std::acosh); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Acosh) { Run(Acosh, std::acosh); }
 
-UNARY_TEST_FLOAT_64(Asinh, { Run(Asinh, std::asinh); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Asinh) { Run(Asinh, std::asinh); }
 
-UNARY_TEST_FLOAT_64(Atanh, { Run(Atanh, std::atanh); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Atanh) { Run(Atanh, std::atanh); }
 
-UNARY_TEST_FLOAT_64(Acos, { Run(Acos, std::acos); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Acos) { Run(Acos, std::acos); }
 
-UNARY_TEST_FLOAT_64(Asin, { Run(Asin, std::asin); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Asin) { Run(Asin, std::asin); }
 
-UNARY_TEST_FLOAT_64(Cosh, { Run(Cosh, std::cosh); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Cosh) { Run(Cosh, std::cosh); }
 
-UNARY_TEST_FLOAT_64(Sinh, { Run(Sinh, std::sinh); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Sinh) { Run(Sinh, std::sinh); }
 
-UNARY_TEST_FLOAT_64(Tanh, {
-  ErrorSpecGen error_spec_gen = GetDefaultSpecGenerator();
-  if (platform_ == "CUDA") {
-    error_spec_gen = +[](NativeT x) {
-      return x <= static_cast<NativeT>(-20.0) || x >= static_cast<NativeT>(20.0)
-                 ? ErrorSpec{0, 0}
-                 : GetDefaultSpecGenerator()(x);
-    };
-  }
-  Run(Tanh, std::tanh, error_spec_gen);
-})
+XLA_TEST_P(ExhaustiveF64UnaryTest, Tanh) { Run(Tanh, std::tanh); }
 
-UNARY_TEST_FLOAT_64(Cos, { Run(Cos, std::cos); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Cos) { Run(Cos, std::cos); }
 
-UNARY_TEST_FLOAT_64(Sin, { Run(Sin, std::sin); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Sin) { Run(Sin, std::sin); }
 
-UNARY_TEST_FLOAT_64(Tan, { Run(Tan, std::tan); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Tan) { Run(Tan, std::tan); }
 
-UNARY_TEST_FLOAT_64(Round, { Run(Round, std::round); })
+XLA_TEST_P(ExhaustiveF64UnaryTest, Round) { Run(Round, std::round); }
 
-UNARY_TEST_FLOAT_64(Erf, {
-  Run(Erf, std::erf, [](NativeT x) { return ErrorSpec{1e-20, 1e-20}; });
-})
-
-UNARY_TEST_FLOAT_64(Erfc, {
-  Run(Erfc, std::erfc, [](NativeT x) { return ErrorSpec{1e-20, 1e-20}; });
-})
-
+#if defined(UNARY_TEST_TARGET_F64)
+#if !defined(XLA_BACKEND_DOES_NOT_SUPPORT_FLOAT64)
 INSTANTIATE_TEST_SUITE_P(
     SpecialValues, ExhaustiveF64UnaryTest,
     ::testing::ValuesIn(CreateFpValuesForBoundaryTest<double>()));
@@ -722,6 +644,8 @@ INSTANTIATE_TEST_SUITE_P(
     LargeAndSmallMagnituedNormalValues, ExhaustiveF64UnaryTest,
     ::testing::ValuesIn(GetFpValuesForMagnitudeExtremeNormals<double>(
         4000000000ull, 16000000)));
+#endif
+#endif
 
 // T is the Primitive Type of the complex number
 // Test parameter is a tuple containing
@@ -748,7 +672,7 @@ class ExhaustiveComplexUnaryTestBase
     this->known_incorrect_fn_ = [&](int64 v) {
       double f = this->ConvertValue(v);
       return (T == C128 &&
-              std::abs(f) > std::numeric_limits<double>::max() / 2) ||
+              std::abs(f) > std::numeric_limits<float>::max() / 2) ||
              f == -std::numeric_limits<double>::infinity();
     };
   }
@@ -789,38 +713,11 @@ class ExhaustiveComplexUnaryTestBase
 typedef ExhaustiveComplexUnaryTestBase<C64> ExhaustiveC64UnaryTest;
 typedef ExhaustiveComplexUnaryTestBase<C128> ExhaustiveC128UnaryTest;
 
-#if defined(UNARY_TEST_TARGET_COMPLEX)
-#define UNARY_TEST_COMPLEX_64(test_name, ...)   \
-  XLA_TEST_P(ExhaustiveC64UnaryTest, test_name) \
-  __VA_ARGS__
-#else
-#define UNARY_TEST_COMPLEX_64(test_name, ...)
-#endif
-
-// TODO(b/138578594): Enable the test for the CPU backend after fixing the bug.
-UNARY_TEST_COMPLEX_64(DISABLED_ON_CPU(Log), {
-  Run(Log, [](complex64 x) { return std::log<float>(x); });
-})
-
-UNARY_TEST_COMPLEX_64(Sqrt, {
-  Run(Sqrt, [](complex64 x) {
-    return static_cast<complex64>(
-        std::sqrt<double>(static_cast<complex128>(x)));
-  });
-})
-
-UNARY_TEST_COMPLEX_64(Rsqrt, {
-  Run(Rsqrt, [](complex64 x) {
-    return static_cast<complex64>(
-        complex128(1, 0) / std::sqrt<double>(static_cast<complex128>(x)));
-  });
-})
-
 // The current libc++ implementation of the complex tanh function provides
 // less accurate results when the denomenator of a complex tanh is small, due
 // to floating point precision loss. To avoid this issue for complex64 numbers,
 // we cast it to and from a complex128 when computing tanh.
-UNARY_TEST_COMPLEX_64(Tanh, {
+XLA_TEST_P(ExhaustiveC64UnaryTest, Tanh) {
   SetParamsForTanh();
   ErrorSpecGen error_spec_gen = +[](complex64 x) {
     // This implementation of Tanh becomes less accurate when the denominator
@@ -837,8 +734,9 @@ UNARY_TEST_COMPLEX_64(Tanh, {
         return static_cast<complex64>(std::tanh(static_cast<complex128>(x)));
       },
       error_spec_gen);
-})
+}
 
+#if defined(UNARY_TEST_TARGET_COMPLEX)
 INSTANTIATE_TEST_SUITE_P(
     F32SpecialValues, ExhaustiveC64UnaryTest,
     ::testing::Combine(
@@ -871,61 +769,29 @@ INSTANTIATE_TEST_SUITE_P(
                                                                          4000)),
         ::testing::ValuesIn(
             GetFpValuesForMagnitudeExtremeNormals<float>(40000, 4000))));
-
-#if defined(UNARY_TEST_TARGET_COMPLEX) && \
-    !defined(XLA_BACKEND_DOES_NOT_SUPPORT_FLOAT64)
-#define UNARY_TEST_COMPLEX_128(test_name, ...)   \
-  XLA_TEST_P(ExhaustiveC128UnaryTest, test_name) \
-  __VA_ARGS__
-#else
-#define UNARY_TEST_COMPLEX_128(test_name, ...)
 #endif
 
-UNARY_TEST_COMPLEX_128(Log, {
-  // TODO(b/138578313): Enable the test for all values after fixing the bug.
-  known_incorrect_fn_ = [&](int64 v) {
-    double f = this->ConvertValue(v);
-    return std::fpclassify(f) == FP_NAN || std::abs(f) > 1.0e+300 ||
-           std::abs(f) < 1.0e-300;
-  };
-  Run(Log, [](complex128 x) { return std::log<double>(x); });
-})
 
-UNARY_TEST_COMPLEX_128(Sqrt, {
-  // Similar to the Tanh bug.
+XLA_TEST_P(ExhaustiveC128UnaryTest, Log) {
+  // TODO(bixia): only test values that are not too big and not too small
+  //             for now and will work on fixing the implementation of XLA
+  //             operations to enable test for other values.
   known_incorrect_fn_ = [&](int64 v) {
-    double f = this->ConvertValue(v);
-    return std::abs(f) > std::numeric_limits<double>::max() / 2;
+    double f = ConvertValue(v);
+    return std::fpclassify(f) == FP_NAN || std::abs(f) > 5 || std::abs(f) < 1;
   };
-  Run(Sqrt, [](complex128 x) { return std::sqrt<double>(x); });
-})
-
-UNARY_TEST_COMPLEX_128(Rsqrt, {
-  ErrorSpecGen error_spec_gen = GetDefaultSpecGenerator();
-  if (platform_ == "CUDA") {
-    // Edge case on CUDA backend where the Log of a complex number made up of
-    // the smallest denormals is more accurate than the interpreter backend.
-    error_spec_gen = [](complex128 x) {
-      constexpr double denorm_min = std::numeric_limits<double>::denorm_min();
-      if (std::abs(x.real()) == denorm_min &&
-          std::abs(x.imag()) == denorm_min) {
-        return ErrorSpec(0.5, 0.5);
-      }
-      return GetDefaultSpecGenerator()(x);
-    };
-  }
   Run(
-      Rsqrt,
-      [](complex128 x) { return complex128(1, 0) / std::sqrt<double>(x); },
-      error_spec_gen);
-})
+      Log, +[](complex128 x) { return std::log(x); });
+}
 
-UNARY_TEST_COMPLEX_128(Tanh, {
+XLA_TEST_P(ExhaustiveC128UnaryTest, Tanh) {
   SetParamsForTanh();
   Run(
       Tanh, +[](complex128 x) { return std::tanh(x); });
-})
+}
 
+#if defined(UNARY_TEST_TARGET_COMPLEX)
+#if !defined(XLA_BACKEND_DOES_NOT_SUPPORT_FLOAT64)
 INSTANTIATE_TEST_SUITE_P(
     SpecialValues, ExhaustiveC128UnaryTest,
     ::testing::Combine(
@@ -958,5 +824,7 @@ INSTANTIATE_TEST_SUITE_P(
             GetFpValuesForMagnitudeExtremeNormals<double>(40000, 2000)),
         ::testing::ValuesIn(
             GetFpValuesForMagnitudeExtremeNormals<double>(40000, 2000))));
+#endif
+#endif
 
 }  // namespace xla

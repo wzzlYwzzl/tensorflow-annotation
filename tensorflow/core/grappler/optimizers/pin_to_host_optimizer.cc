@@ -55,8 +55,7 @@ bool IsTensorSmall(const OpInfo::TensorProperties& prop) {
 
   // Check type to be int32 or int64.
   if (prop.dtype() != DataType::DT_INT32 &&
-      prop.dtype() != DataType::DT_INT64 &&
-      prop.dtype() != DataType::DT_FLOAT) {
+      prop.dtype() != DataType::DT_INT64) {
     return false;
   }
 
@@ -340,7 +339,6 @@ Status PinToHostOptimizer::Optimize(Cluster* cluster, const GrapplerItem& item,
       if (IsConstant(node)) {
         const_nodes.emplace_back(&node, node.device());
       }
-      VLOG(2) << "Moving node " << node.name() << " to device " << device;
       *node.mutable_device() = std::move(device);
     }
   }
@@ -357,8 +355,6 @@ Status PinToHostOptimizer::Optimize(Cluster* cluster, const GrapplerItem& item,
       // The consumer is not Host friendly, swap it back to the original device.
       if (!internal::IsNodeInputPortHostFriendly(*fanout.node,
                                                  fanout.port_id)) {
-        VLOG(2) << "Swapping node " << node->name() << " back to device "
-                << device;
         node->set_device(device);
         break;
       }

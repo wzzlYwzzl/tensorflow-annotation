@@ -26,11 +26,6 @@ limitations under the License.
 namespace tensorflow {
 namespace functor {
 
-template <typename Reducer>
-struct ReducerTraits {
-  enum { IsScalarIdentity = true };
-};
-
 // Dummy class used for template specialization for mean reduction, which is
 // accomplished by SumReducer and on-the-fly division by the reduction factor.
 template <typename Scalar>
@@ -42,11 +37,6 @@ struct MeanReducer {
 template <typename Scalar>
 struct EuclideanNormReducer {
   Scalar initialize() const { return Scalar(0); }
-};
-
-template <typename Scalar>
-struct ReducerTraits<EuclideanNormReducer<Scalar>> {
-  enum { IsScalarIdentity = false };
 };
 
 template <typename Device, typename OUT_T, typename IN_T,

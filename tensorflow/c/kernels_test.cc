@@ -22,7 +22,7 @@ limitations under the License.
 #include "tensorflow/c/c_api.h"
 #include "tensorflow/core/framework/attr_value.pb.h"
 #include "tensorflow/core/framework/kernel_def.pb.h"
-#include "tensorflow/core/framework/node_def.pb.h"
+#include "tensorflow/core/framework/node_def.pb_text.h"
 #include "tensorflow/core/framework/node_def_builder.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -348,13 +348,11 @@ REGISTER_OP("AllocateOutputOp1").Output("output1: float");
 TEST_F(DeviceKernelOpTest, TestAllocateOutputSizeOne) {
   auto my_compute_func = [](void* kernel, TF_OpKernelContext* ctx) {
     // Allocate output
-    TF_Status* s = TF_NewStatus();
     int64_t dim = 1;
     size_t tensor_size_bytes = TF_DataTypeSize(TF_FLOAT);
     TF_Tensor* output = TF_AllocateOutput(
         /*context=*/ctx, /*index=*/0, /*dtype=*/TF_FLOAT, /*dims=*/&dim,
-        /*num_dims=*/1, /*len=*/tensor_size_bytes, s);
-    EXPECT_EQ(TF_OK, TF_GetCode(s));
+        /*num_dims=*/1, /*len=*/tensor_size_bytes);
     EXPECT_EQ(TF_FLOAT, TF_TensorType(output));
     EXPECT_EQ(1, TF_NumDims(output));
     EXPECT_EQ(1, TF_Dim(output, 0));
@@ -369,6 +367,10 @@ TEST_F(DeviceKernelOpTest, TestAllocateOutputSizeOne) {
 #else
     *data = value;
 #endif
+
+    TF_Status* s = TF_NewStatus();
+    TF_SetOutput(ctx, 0, output, s);
+    EXPECT_EQ(TF_OK, TF_GetCode(s));
 
     TF_DeleteStatus(s);
     TF_DeleteTensor(output);
@@ -386,17 +388,19 @@ REGISTER_OP("AllocateOutputOp0").Output("output1: float");
 
 TEST_F(DeviceKernelOpTest, TestAllocateEmptyOutput) {
   auto my_compute_func = [](void* kernel, TF_OpKernelContext* ctx) {
-    TF_Status* s = TF_NewStatus();
     // Allocate empty output
     int64_t dim = 0;
     TF_Tensor* output = TF_AllocateOutput(
         /*context=*/ctx, /*index=*/0, /*dtype=*/TF_FLOAT, /*dims=*/&dim,
-        /*num_dims=*/1, /*len=*/0, s);
+        /*num_dims=*/1, /*len=*/0);
 
-    EXPECT_EQ(TF_OK, TF_GetCode(s));
     EXPECT_EQ(TF_FLOAT, TF_TensorType(output));
     EXPECT_EQ(1, TF_NumDims(output));
     EXPECT_EQ(0, TF_Dim(output, 0));
+
+    TF_Status* s = TF_NewStatus();
+    TF_SetOutput(ctx, 0, output, s);
+    EXPECT_EQ(TF_OK, TF_GetCode(s));
 
     TF_DeleteStatus(s);
     TF_DeleteTensor(output);
@@ -414,14 +418,12 @@ REGISTER_OP("AllocateOutputOp2x3").Output("output1: float");
 
 TEST_F(DeviceKernelOpTest, TestAllocateOutputSize2x3) {
   auto my_compute_func = [](void* kernel, TF_OpKernelContext* ctx) {
-    TF_Status* s = TF_NewStatus();
     // Allocate 2x3 output
     int64_t dim[2] = {2, 3};
     size_t tensor_size_bytes = 6 * TF_DataTypeSize(TF_FLOAT);
     TF_Tensor* output = TF_AllocateOutput(
         /*context=*/ctx, /*index=*/0, /*dtype=*/TF_FLOAT, /*dims=*/dim,
-        /*num_dims=*/2, /*len=*/tensor_size_bytes, s);
-    EXPECT_EQ(TF_OK, TF_GetCode(s));
+        /*num_dims=*/2, /*len=*/tensor_size_bytes);
     EXPECT_EQ(TF_FLOAT, TF_TensorType(output));
     EXPECT_EQ(2, TF_NumDims(output));
     EXPECT_EQ(2, TF_Dim(output, 0));
@@ -437,6 +439,10 @@ TEST_F(DeviceKernelOpTest, TestAllocateOutputSize2x3) {
 #else
     memcpy(data, value, tensor_size_bytes);
 #endif
+
+    TF_Status* s = TF_NewStatus();
+    TF_SetOutput(ctx, 0, output, s);
+    EXPECT_EQ(TF_OK, TF_GetCode(s));
 
     TF_DeleteStatus(s);
     TF_DeleteTensor(output);

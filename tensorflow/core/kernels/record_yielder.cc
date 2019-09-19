@@ -44,7 +44,7 @@ RecordYielder::~RecordYielder() {
   delete thread_;
 }
 
-Status RecordYielder::YieldOne(tstring* value) {
+Status RecordYielder::YieldOne(string* value) {
   mutex_lock l(mu_);
   while (!BufEnough() && status_.ok()) {
     buf_enough_.wait(l);
@@ -70,7 +70,7 @@ Status RecordYielder::YieldOne(tstring* value) {
 
 struct RecordYielder::Shard {
   int index;                      // Shard index.
-  std::vector<tstring> filenames;  // File names given to this shard.
+  std::vector<string> filenames;  // File names given to this shard.
   Notification done;              // Notified when this shard is done.
   Status status;                  // Shard status.
 };
@@ -211,7 +211,7 @@ void RecordYielder::ShardLoop(Shard* shard) {
             opts_.compression_type);
     io::RecordReader rdr(file.get(), options);
     uint64 offset = 0;
-    tstring record;
+    string record;
     while (true) {
       Status s = rdr.ReadRecord(&offset, &record);
       if (s.ok()) {

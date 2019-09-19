@@ -49,12 +49,12 @@ void Canonicalizer::runOnFunction() {
   for (auto *op : context->getRegisteredOperations())
     op->getCanonicalizationPatterns(patterns, context);
 
-  applyPatternsGreedily(func, patterns);
+  applyPatternsGreedily(func, std::move(patterns));
 }
 
 /// Create a Canonicalizer pass.
-std::unique_ptr<OpPassBase<FuncOp>> mlir::createCanonicalizerPass() {
-  return std::make_unique<Canonicalizer>();
+FunctionPassBase *mlir::createCanonicalizerPass() {
+  return new Canonicalizer();
 }
 
 static PassRegistration<Canonicalizer> pass("canonicalize",

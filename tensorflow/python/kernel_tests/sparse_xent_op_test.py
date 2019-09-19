@@ -82,7 +82,6 @@ class SparseXentTest(test.TestCase):
       self.assertAllClose([[0.0], [0.0], [0.0]], tf_backprop)
 
   @test_util.run_deprecated_v1
-  @test_util.disable_xla("XLA cannot assert inside of a kernel.")
   def testInvalidLabel(self):
     features = [[1., 1., 1., 1.], [1., 1., 1., 1.], [1., 2., 3., 4.],
                 [1., 2., 3., 4.]]

@@ -15,7 +15,6 @@ limitations under the License.
 #include "tensorflow/core/distributed_runtime/eager/remote_tensor_handle_data.h"
 
 #include "tensorflow/core/distributed_runtime/eager/destroy_tensor_handle_node.h"
-#include "tensorflow/core/distributed_runtime/eager/eager_client.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/gtl/cleanup.h"
 #include "tensorflow/core/lib/strings/strcat.h"
@@ -24,21 +23,14 @@ namespace tensorflow {
 
 namespace {
 
-void DestroyRemoteTensorHandle(EagerContext* ctx, const string& remote_task,
-                               uint64 context_id, uint64 op_id, int output_num,
-                               bool ready) {
+void DestoryRemoteTensorHandle(EagerContext* ctx,
+                               eager::EagerClient* eager_client,
+                               uint64 context_id, uint64 op_id,
+                               int output_num) {
   if (ctx->GetContextId() != context_id) {
     // This means that this tensor was pointing to a remote device, which
     // has been changed out from under us. Simply return since there is
     // nothing we can do.
-    return;
-  }
-
-  eager::EagerClient* eager_client;
-  Status status = ctx->GetClient(remote_task, &eager_client);
-  if (!status.ok()) {
-    LOG(INFO) << "Unable to destroy remote tensor handle because the target "
-              << remote_task << " is no longer available.";
     return;
   }
 
@@ -49,42 +41,28 @@ void DestroyRemoteTensorHandle(EagerContext* ctx, const string& remote_task,
   handle_to_decref->set_op_id(op_id);
   handle_to_decref->set_output_num(output_num);
 
-  VLOG(3) << "Sending request to delete " << request->DebugString();
   std::unique_ptr<EagerNode> node(
       absl::make_unique<eager::DestroyTensorHandleNode>(std::move(request),
-                                                        eager_client, ready));
-  auto& executor = ctx->Executor();
-  if (executor.Async()) {
-    Status status = executor.AddOrExecute(std::move(node));
-    if (!status.ok()) {
-      LOG(ERROR) << "Unable to destroy remote tensor handles: "
-                 << status.error_message();
-    }
-  } else {
-    // This thread may still hold tensorflow::StreamingRPCState::mu_. We need
-    // to send out the destroy request in a new thread to avoid deadlock.
-    auto* released_node = node.release();
-    (*ctx->runner())([ctx, released_node] {
-      Status status =
-          ctx->Executor().AddOrExecute(absl::WrapUnique(released_node));
-      if (!status.ok()) {
-        LOG(ERROR) << "Unable to destroy remote tensor handles: "
-                   << status.error_message();
-      }
-    });
+                                                        eager_client));
+  auto* executor = ctx->Executor();
+  Status s = executor->Async() ? executor->Add(std::move(node)) : node->Run();
+  if (!s.ok()) {
+    LOG(ERROR) << "Unable to destroy remote tensor handles: "
+               << s.error_message();
   }
 }
+
 }  // namespace
 
 RemoteTensorHandleData::RemoteTensorHandleData(int64 op_id, int output_num,
                                                const TensorShape& shape,
-                                               const string& remote_task,
+                                               eager::EagerClient* eager_client,
                                                uint64 context_id,
                                                EagerContext* ctx)
     : op_id_(op_id),
       output_num_(output_num),
       shape_(shape),
-      remote_task_(remote_task),
+      eager_client_(eager_client),
       context_id_(context_id),
       ctx_(ctx) {
   DCHECK(op_id_ >= 0 && output_num_ >= 0)
@@ -94,8 +72,8 @@ RemoteTensorHandleData::RemoteTensorHandleData(int64 op_id, int output_num,
 }
 
 RemoteTensorHandleData::~RemoteTensorHandleData() {
-  DestroyRemoteTensorHandle(ctx_, remote_task_, context_id_, op_id_,
-                            output_num_, /*ready=*/true);
+  DestoryRemoteTensorHandle(ctx_, eager_client_, context_id_, op_id_,
+                            output_num_);
   ctx_->Unref();
 }
 
@@ -141,12 +119,12 @@ string RemoteTensorHandleData::DebugString() const {
 }
 
 UnshapedRemoteTensorHandleData::UnshapedRemoteTensorHandleData(
-    int64 op_id, int32 output_num, const string& remote_task, uint64 context_id,
-    EagerContext* ctx)
+    int64 op_id, int32 output_num, eager::EagerClient* eager_client,
+    uint64 context_id, EagerContext* ctx)
     : op_id_(op_id),
       output_num_(output_num),
       delete_remote_tensor_(true),
-      remote_task_(remote_task),
+      eager_client_(eager_client),
       context_id_(context_id),
       ctx_(ctx) {
   DCHECK(op_id_ >= 0 && output_num_ >= 0)
@@ -157,8 +135,8 @@ UnshapedRemoteTensorHandleData::UnshapedRemoteTensorHandleData(
 
 UnshapedRemoteTensorHandleData::~UnshapedRemoteTensorHandleData() {
   if (delete_remote_tensor_) {
-    DestroyRemoteTensorHandle(ctx_, remote_task_, context_id_, op_id_,
-                              output_num_, /*ready=*/false);
+    DestoryRemoteTensorHandle(ctx_, eager_client_, context_id_, op_id_,
+                              output_num_);
   }
   ctx_->Unref();
 }

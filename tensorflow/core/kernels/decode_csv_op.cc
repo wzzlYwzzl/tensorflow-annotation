@@ -70,7 +70,7 @@ class DecodeCSVOp : public OpKernel {
                       " has ", record_defaults[i].NumElements()));
     }
 
-    auto records_t = records->flat<tstring>();
+    auto records_t = records->flat<string>();
     int64 records_size = records_t.size();
 
     OpOutputList output;
@@ -181,10 +181,10 @@ class DecodeCSVOp : public OpKernel {
                           errors::InvalidArgument(
                               "Field ", f,
                               " is required but missing in record ", i, "!"));
-              output[f]->flat<tstring>()(i) =
-                  record_defaults[f].flat<tstring>()(0);
+              output[f]->flat<string>()(i) =
+                  record_defaults[f].flat<string>()(0);
             } else {
-              output[f]->flat<tstring>()(i) = std::move(fields[f]);
+              output[f]->flat<string>()(i) = fields[f];
             }
             break;
           }

@@ -16,6 +16,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/gpu/custom_call_thunk.h"
 
 #include "absl/strings/str_format.h"
+#include "tensorflow/stream_executor/cuda/cuda_stream.h"
 #include "tensorflow/stream_executor/gpu/gpu_stream.h"
 
 namespace xla {

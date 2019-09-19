@@ -42,8 +42,7 @@ Status InputBuffer::FillBuffer() {
   return s;
 }
 
-template <typename T>
-Status InputBuffer::ReadLine(T* result) {
+Status InputBuffer::ReadLine(string* result) {
   result->clear();
   Status s;
   do {
@@ -71,11 +70,6 @@ Status InputBuffer::ReadLine(T* result) {
   }
   return s;
 }
-
-template Status InputBuffer::ReadLine<string>(string* result);
-#ifdef USE_TSTRING
-template Status InputBuffer::ReadLine<tstring>(tstring* result);
-#endif  // USE_TSTRING
 
 Status InputBuffer::ReadNBytes(int64 bytes_to_read, string* result) {
   result->clear();

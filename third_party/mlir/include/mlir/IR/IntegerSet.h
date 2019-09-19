@@ -72,22 +72,12 @@ public:
   /// Returns true if this is the canonical integer set.
   bool isEmptyIntegerSet() const;
 
-  /// This method substitutes any uses of dimensions and symbols (e.g.
-  /// dim#0 with dimReplacements[0]) in subexpressions and returns the modified
-  /// integer set.  Because this can be used to eliminate dims and
-  /// symbols, the client needs to specify the number of dims and symbols in
-  /// the result.  The returned map always has the same number of results.
-  IntegerSet replaceDimsAndSymbols(ArrayRef<AffineExpr> dimReplacements,
-                                   ArrayRef<AffineExpr> symReplacements,
-                                   unsigned numResultDims,
-                                   unsigned numResultSyms);
-
   explicit operator bool() { return set; }
   bool operator==(IntegerSet other) const { return set == other.set; }
 
   unsigned getNumDims() const;
   unsigned getNumSymbols() const;
-  unsigned getNumInputs() const;
+  unsigned getNumOperands() const;
   unsigned getNumConstraints() const;
   unsigned getNumEqualities() const;
   unsigned getNumInequalities() const;
@@ -105,10 +95,6 @@ public:
   bool isEq(unsigned idx) const;
 
   MLIRContext *getContext() const;
-
-  /// Walk all of the AffineExpr's in this set's constraints. Each node in an
-  /// expression tree is visited in postorder.
-  void walkExprs(llvm::function_ref<void(AffineExpr)> callback) const;
 
   void print(raw_ostream &os) const;
   void dump() const;

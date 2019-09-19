@@ -340,16 +340,11 @@ class TestUpgrade(test_util.TensorFlowTestCase, parameterized.TestCase):
     method_names = full_dict.keys()
     for method_name in method_names:
       args = full_dict[method_name].keys()
-      if "contrib" in method_name:
-        # Skip descending and fetching contrib methods during test. These are
-        # not available in the repo anymore.
-        continue
-      elif method_name.startswith("*."):
-        # special case for optimizer methods
+      # special case for optimizer methods
+      if method_name.startswith("*."):
         method = method_name.replace("*", "tf.train.Optimizer")
       else:
         method = method_name
-
       method = get_symbol_for_name(tf, method)
       arg_spec = tf_inspect.getfullargspec(method)
       for (arg, pos) in args:

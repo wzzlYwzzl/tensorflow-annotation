@@ -7,7 +7,8 @@
 # CHECK:  "tf.Placeholder.input"(%arg0)
 
 # CHECK: tf.Relu
-# CHECK:  %[[IDENTITY:[0-9]+]]:3 = tf_executor.island wraps "tf.IdentityN"
+# CHECK:  %[[IDENTITY:[0-9]+]]:3 = tf_executor.island
+# CHECK-NEXT: tf.Identity
 # CHECK:  fetch %[[IDENTITY]]#1, %[[IDENTITY]]#0 : tensor<f32>, tensor<f32>
 
 node {

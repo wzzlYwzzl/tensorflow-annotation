@@ -28,12 +28,11 @@ class MemoryBuffer;
 } // end namespace llvm
 namespace mlir {
 struct LogicalResult;
-class PassPipelineCLParser;
+class PassRegistryEntry;
 
-LogicalResult MlirOptMain(llvm::raw_ostream &os,
-                          std::unique_ptr<llvm::MemoryBuffer> buffer,
-                          const PassPipelineCLParser &passPipeline,
-                          bool splitInputFile, bool verifyDiagnostics,
-                          bool verifyPasses);
+LogicalResult
+MlirOptMain(llvm::raw_ostream &os, std::unique_ptr<llvm::MemoryBuffer> buffer,
+            const std::vector<const PassRegistryEntry *> &passList,
+            bool splitInputFile, bool verifyDiagnostics, bool verifyPasses);
 
 } // end namespace mlir

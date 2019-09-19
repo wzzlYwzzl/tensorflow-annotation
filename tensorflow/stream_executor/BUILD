@@ -473,6 +473,7 @@ tf_proto_library(
     srcs = ["dnn.proto"],
     cc_api_version = 2,
     make_default_target_header_only = True,
+    provide_cc_alias = True,
 )
 
 cc_library(
@@ -693,7 +694,6 @@ cc_library(
         ":device_memory",
         ":device_memory_allocator",
         ":platform",
-        ":stream_executor_headers",
         "//tensorflow/core:allocator",
         "//tensorflow/core:lib",
         "//tensorflow/stream_executor/lib",

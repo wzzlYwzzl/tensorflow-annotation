@@ -91,7 +91,6 @@ tf_cuda_library(
     deps = [
         ":attr_builder",
         ":context",
-        ":eager_executor",
         ":tensor_handle",
         "//tensorflow/core:framework",
     ],
@@ -178,17 +177,6 @@ tf_cuda_library(
     }),
 )
 
-KERNEL_AND_DEVICE_DEPS = [
-    "//tensorflow/core:core_cpu_lib",
-    "//tensorflow/core:framework",
-    "//tensorflow/core:framework_internal",
-    "//tensorflow/core:lib",
-    "//tensorflow/core:lib_internal",
-    "//tensorflow/core:protos_all_cc",
-    "//tensorflow/core/profiler/lib:traceme",
-    "//tensorflow/core/grappler/optimizers:meta_optimizer",
-]
-
 tf_cuda_library(
     name = "kernel_and_device",
     srcs = [
@@ -206,9 +194,15 @@ tf_cuda_library(
         "//tensorflow:android": [
             "//tensorflow/core:android_tensorflow_lib_lite",
         ],
-        "//tensorflow:windows": KERNEL_AND_DEVICE_DEPS,
-        "//conditions:default": KERNEL_AND_DEVICE_DEPS + [
-            "//tensorflow/compiler/jit:xla_kernel_creator_util",
+        "//conditions:default": [
+            "//tensorflow/core:core_cpu_lib",
+            "//tensorflow/core:framework",
+            "//tensorflow/core:framework_internal",
+            "//tensorflow/core:lib",
+            "//tensorflow/core:lib_internal",
+            "//tensorflow/core:protos_all_cc",
+            "//tensorflow/core/profiler/lib:traceme",
+            "//tensorflow/core/grappler/optimizers:meta_optimizer",
         ],
     }),
 )
@@ -283,7 +277,8 @@ cc_library(
 cc_library(
     name = "mkl_eager_op_rewrite",
     srcs = ["mkl_eager_op_rewrite.cc"],
-    copts = tf_copts(allow_exceptions = True),
+    copts = tf_copts(),
+    nocopts = "-fno-exceptions",
     deps = [
         ":eager_op_rewrite_registry",
         "//tensorflow/core:framework",

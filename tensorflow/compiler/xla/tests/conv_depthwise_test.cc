@@ -39,8 +39,7 @@ static std::vector<DepthwiseConvolution2DSpec> GetConv2DTestCases() {
   std::vector<std::vector<int64>> config_options = {
       {128, 6, 3, 64},  {256, 5, 3, 256}, {256, 5, 2, 144}, {144, 5, 3, 64},
       {144, 5, 2, 256}, {8, 48, 17, 8},   {128, 20, 6, 64}, {64, 14, 12, 172},
-      {16, 9, 4, 16},   {128, 1, 2, 144}, {256, 1, 2, 64},  {256, 1, 2, 2},
-      {144, 5, 3, 3},   {8, 48, 17, 1},   {16, 9, 5, 4}};
+      {16, 9, 4, 16},   {128, 1, 2, 144}, {256, 1, 2, 64}};
 
   for (auto option : config_options) {
     int64 feature = option[0];
@@ -61,7 +60,6 @@ static std::vector<DepthwiseConvolution2DSpec> GetConv2DTestCases() {
     config.output_layout = {3, 0, 2, 1};
 
     if (activation_size == 1 && kernel_size == 2) {
-      config.stride = config.pad = config.lhs_dilate = -1;
       // Test for outer dim.
       config.output_dims = {batch, activation_size + kernel_size - 1,
                             activation_size + kernel_size, feature};

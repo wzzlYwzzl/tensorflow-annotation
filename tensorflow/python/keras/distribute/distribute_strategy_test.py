@@ -280,14 +280,10 @@ def strategy_and_optimizer_combinations():
               strategy_combinations.adam_optimizer_v1_fn,
               strategy_combinations.gradient_descent_optimizer_v1_fn,
               strategy_combinations.rmsprop_optimizer_v1_fn,
-              strategy_combinations.adadelta_optimizer_keras_v2_fn,
               strategy_combinations.adagrad_optimizer_keras_v2_fn,
               strategy_combinations.adam_optimizer_keras_v2_fn,
-              strategy_combinations.adamax_optimizer_keras_v2_fn,
               strategy_combinations.gradient_descent_optimizer_keras_v2_fn,
-              strategy_combinations.nadam_optimizer_keras_v2_fn,
-              strategy_combinations.rmsprop_optimizer_keras_v2_fn,
-              strategy_combinations.ftrl_optimizer_keras_v2_fn
+              strategy_combinations.rmsprop_optimizer_keras_v2_fn
           ],
           experimental_run_tf_function=[True, False]))
   tpu_strategies_graph = combinations.combine(
@@ -1590,6 +1586,12 @@ class TestDistributionStrategyWithKerasModels(test.TestCase,
   def test_distribution_strategy_with_symbolic_add_loss(
       self, mode, distribution, experimental_run_tf_function):
 
+    # TODO(b/123533246): Enable the test for TPU once bug is fixed
+    if (isinstance(distribution,
+                   (tpu_strategy.TPUStrategy, tpu_strategy.TPUStrategyV1)) and
+        mode == 'graph' and not experimental_run_tf_function):
+      self.skipTest('TPU Strategy in graph mode fails with this test.')
+
     def _make_model_with_add_loss():
       inputs = keras.Input((10,))
       x1 = keras.layers.Dense(10, kernel_initializer='zeros')(inputs)
@@ -2021,8 +2023,12 @@ class TestDistributionStrategyWithMultipleAddLossAndMetricCalls(
               l1=[0.01],
               l2=[0.1])))
   def test_fit_and_evaluate(self, distribution, model_fn, l1, l2):
+    # TODO(b/138445028): Enable the test for TPU once bug is fixed.
+    if (isinstance(distribution,
+                   (tpu_strategy.TPUStrategy, tpu_strategy.TPUStrategyV1))):
+      self.skipTest('Flaky with TPUStrategy')
+
     # Make fake MNIST-like image data.
-    np.random.seed(_RANDOM_SEED)
     dataset = dataset_ops.DatasetV2.from_tensor_slices(
         (np.random.uniform(size=(64, 28, 28, 1)).astype(np.float32),
          np.random.randint(0, 10, size=(64,))))
@@ -2046,7 +2052,7 @@ class TestDistributionStrategyWithMultipleAddLossAndMetricCalls(
       model.fit(dataset)
     results = dict(zip(model.metrics_names, model.evaluate(dataset)))
     # Sanity checks.
-    self.assertBetween(results['sparse_categorical_accuracy'], 0.02, 1.)
+    self.assertBetween(results['sparse_categorical_accuracy'], 0.05, 1.)
     self.assertGreater(results['l2_loss'], 0.)
     self.assertGreater(results['l1_loss'], 0.)
     # Assert correctness of the loss calculation and updating of metrics.

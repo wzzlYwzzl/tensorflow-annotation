@@ -64,10 +64,7 @@ class BigtableSampleKeysDatasetOp : public DatasetOpKernel {
 
     BigtableTableResource* table() const { return table_; }
 
-    Status CheckExternalState() const override {
-      return errors::FailedPrecondition(DebugString(),
-                                        " depends on external state.");
-    }
+    bool IsStateful() const override { return true; }
 
    protected:
     Status AsGraphDefInternal(SerializationContext* ctx,
@@ -102,25 +99,14 @@ class BigtableSampleKeysDatasetOp : public DatasetOpKernel {
         if (index_ < row_keys_.size()) {
           out_tensors->emplace_back(ctx->allocator({}), DT_STRING,
                                     TensorShape({}));
-          out_tensors->back().scalar<tstring>()() =
-              tstring(row_keys_[index_].row_key);
+          out_tensors->back().scalar<string>()() =
+              string(row_keys_[index_].row_key);
           *end_of_sequence = false;
           index_++;
         } else {
           *end_of_sequence = true;
         }
         return Status::OK();
-      }
-
-     protected:
-      Status SaveInternal(IteratorStateWriter* writer) override {
-        return errors::Unimplemented("SaveInternal is currently not supported");
-      }
-
-      Status RestoreInternal(IteratorContext* ctx,
-                             IteratorStateReader* reader) override {
-        return errors::Unimplemented(
-            "RestoreInternal is currently not supported");
       }
 
      private:

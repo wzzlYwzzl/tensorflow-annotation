@@ -33,7 +33,7 @@ class RendezvousUtilTest : public ::testing::Test {
 // string -> Tensor<string>
 Tensor V(const string& content) {
   Tensor tensor(DT_STRING, TensorShape({}));
-  tensor.scalar<tstring>()() = content;
+  tensor.scalar<string>()() = content;
   return tensor;
 }
 
@@ -41,7 +41,7 @@ Tensor V(const string& content) {
 string V(const Tensor& tensor) {
   CHECK_EQ(tensor.dtype(), DT_STRING);
   CHECK(TensorShapeUtils::IsScalar(tensor.shape()));
-  return tensor.scalar<tstring>()();
+  return tensor.scalar<string>()();
 }
 
 string MakeStringKey(const string& name) {

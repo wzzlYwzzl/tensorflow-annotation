@@ -37,14 +37,12 @@ GemmThunk::GemmThunk(const BufferAllocation::Slice &lhs_buffer,
                      const BufferAllocation::Slice &rhs_buffer,
                      const BufferAllocation::Slice &output_buffer,
                      bool implements_whole_instruction,
-                     const HloInstruction *hlo_instruction,
-                     const GemmBackendConfig &backend_config)
+                     const HloInstruction *hlo_instruction)
     : Thunk(Kind::kGemm, hlo_instruction),
       lhs_buffer_(lhs_buffer),
       rhs_buffer_(rhs_buffer),
       output_buffer_(output_buffer),
-      implements_whole_instruction_(implements_whole_instruction),
-      backend_config_(backend_config) {}
+      implements_whole_instruction_(implements_whole_instruction) {}
 
 Status GemmThunk::ExecuteOnStream(const ExecuteParams &params) {
   auto get_device_address = [&](const BufferAllocation::Slice &slice) {
@@ -55,9 +53,8 @@ Status GemmThunk::ExecuteOnStream(const ExecuteParams &params) {
   se::DeviceMemoryBase lhs_data = get_device_address(lhs_buffer_);
   se::DeviceMemoryBase rhs_data = get_device_address(rhs_buffer_);
   se::DeviceMemoryBase output_data = get_device_address(output_buffer_);
-  return RunGemm(hlo_instruction(), backend_config_, lhs_data, rhs_data,
-                 output_data, params.stream, implements_whole_instruction_,
-                 params.profiler);
+  return RunGemm(hlo_instruction(), lhs_data, rhs_data, output_data,
+                 params.stream, implements_whole_instruction_, params.profiler);
 }
 
 // This struct contains the metadata of a matrix, e.g., its base address and
@@ -155,9 +152,8 @@ static bool DoGemmWithAlgorithm(
       .ok();
 }
 
-Status RunGemm(const HloInstruction *gemm,
-               const GemmBackendConfig &backend_config,
-               se::DeviceMemoryBase lhs_buffer, se::DeviceMemoryBase rhs_buffer,
+Status RunGemm(const HloInstruction *gemm, se::DeviceMemoryBase lhs_buffer,
+               se::DeviceMemoryBase rhs_buffer,
                se::DeviceMemoryBase output_buffer, se::Stream *stream,
                bool implements_whole_instruction,
                HloExecutionProfiler *profiler,
@@ -166,6 +162,8 @@ Status RunGemm(const HloInstruction *gemm,
   VLOG(2) << "Executing a GemmThunk";
   CHECK(IsCublasGemm(*gemm));
 
+  TF_ASSIGN_OR_RETURN(GemmBackendConfig backend_config,
+                      gemm->backend_config<GemmBackendConfig>());
   const Shape &output_shape = gemm->shape();
   const HloInstruction *lhs = gemm->operand(0);
   const HloInstruction *rhs = gemm->operand(1);

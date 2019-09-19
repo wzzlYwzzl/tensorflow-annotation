@@ -45,8 +45,7 @@ class DecodeVideoOp : public OpKernel {
                 errors::InvalidArgument(
                     "contents must be a rank-0 tensor but got shape ",
                     contents_tensor.shape().DebugString()));
-    const tensorflow::StringPiece contents =
-        contents_tensor.scalar<tstring>()();
+    const tensorflow::StringPiece contents = contents_tensor.scalar<string>()();
 
     // Write the input data to a temp file.
     string extension;

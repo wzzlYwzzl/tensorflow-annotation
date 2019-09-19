@@ -1139,18 +1139,17 @@ def is_current_worker_chief():
   return dc_context.get_current_worker_context().is_chief
 
 
-def filter_distributed_callbacks(callbacks_list, model):
+def filter_distributed_callbacks(callbacks_list):
   """Filter Callbacks based on the worker context when running multi-worker.
 
   Arguments:
     callbacks_list: A list of `Callback` instances.
-    model: Keras model instance.
 
   Returns:
     The list of `Callback` instances that should be run on this worker.
   """
 
-  if not model._in_multi_worker_mode():
+  if not multi_worker_util.in_multi_worker_mode():
     raise ValueError(
         'filter_distributed_callbacks() should only be called when Keras '
         'is in multi worker mode.')

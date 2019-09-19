@@ -23,7 +23,6 @@ limitations under the License.
 #include "tensorflow/core/lib/gtl/map_util.h"
 #include "tensorflow/core/lib/hash/hash.h"
 #include "tensorflow/core/platform/types.h"
-#include "tensorflow/core/util/dump_graph.h"
 
 namespace tensorflow {
 
@@ -200,12 +199,6 @@ Status EnsureMemoryTypes(const DeviceType& device_type,
       g->RemoveEdge(e);
     }
   }
-
-  if (VLOG_IS_ON(2)) {
-    VLOG(2) << "Dumped graph after EnsureMemoryTypes to "
-            << DumpGraphToFile("EnsureMemoryTypes", *g);
-  }
-
   return ValidateMemoryTypes(device_type, g);
 }
 

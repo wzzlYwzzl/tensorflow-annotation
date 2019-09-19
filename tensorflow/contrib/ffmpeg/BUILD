@@ -79,6 +79,7 @@ cc_library(
 
 tf_gen_op_wrapper_py(
     name = "decode_audio_op_py",
+    require_shape_functions = True,
     visibility = ["//visibility:private"],
     deps = [
         ":decode_audio_op_cc",
@@ -87,6 +88,7 @@ tf_gen_op_wrapper_py(
 
 tf_gen_op_wrapper_py(
     name = "encode_audio_op_py",
+    require_shape_functions = True,
     visibility = ["//visibility:private"],
     deps = [
         ":encode_audio_op_cc",
@@ -95,6 +97,7 @@ tf_gen_op_wrapper_py(
 
 tf_gen_op_wrapper_py(
     name = "decode_video_op_py",
+    require_shape_functions = True,
     visibility = ["//visibility:private"],
     deps = [
         ":decode_video_op_cc",

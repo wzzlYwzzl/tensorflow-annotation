@@ -38,18 +38,15 @@ _GRPC_PREFIX = "grpc://"
 @tf_export("config.experimental_connect_to_host")
 def connect_to_remote_host(remote_host=None, job_name="worker"):
   """Connects to a single machine to enable remote execution on it.
-
   Will make devices on the remote host available to use. Note that calling this
   more than once will work, but will invalidate any tensor handles on the old
   remote devices.
-
   Using the default job_name of worker, you can schedule ops to run remotely as
   follows:
   ```python
   # Enable eager execution, and connect to the remote host.
   tf.compat.v1.enable_eager_execution()
   tf.contrib.eager.connect_to_remote_host("exampleaddr.com:9876")
-
   with ops.device("job:worker/replica:0/task:1/device:CPU:0"):
     # The following tensors should be resident on the remote device, and the op
     # will also execute remotely.
@@ -57,11 +54,9 @@ def connect_to_remote_host(remote_host=None, job_name="worker"):
     x2 = array_ops.ones([2, 2])
     y = math_ops.matmul(x1, x2)
   ```
-
   Args:
     remote_host: a single or a list the remote server addr in host-port format.
     job_name: The job name under which the new server will be accessible.
-
   Raises:
     ValueError: if remote_host is None.
   """
@@ -82,14 +77,11 @@ def connect_to_cluster(cluster_spec_or_resolver,
                        protocol=None,
                        make_master_device_default=True):
   """Connects to the given cluster.
-
   Will make devices on the cluster available to use. Note that calling this more
   than once will work, but will invalidate any tensor handles on the old remote
   devices.
-
   If the given local job name is not present in the cluster specification, it
   will be automatically added, using an unused port on the localhost.
-
   Args:
     cluster_spec_or_resolver: A `ClusterSpec` or `ClusterResolver` describing
       the cluster.

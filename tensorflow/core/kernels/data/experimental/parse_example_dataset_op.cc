@@ -15,7 +15,6 @@ limitations under the License.
 #include <deque>
 
 #include "tensorflow/core/common_runtime/device.h"
-#include "tensorflow/core/common_runtime/metrics.h"
 #include "tensorflow/core/framework/stats_aggregator.h"
 #include "tensorflow/core/kernels/data/parallel_map_dataset_op.h"
 #include "tensorflow/core/kernels/data/stats_utils.h"
@@ -67,8 +66,6 @@ class ParseExampleDatasetOp : public UnaryDatasetOpKernel {
       }
       elements_per_stride_.push_back(dense_shape.num_elements());
     }
-    metrics::RecordParseDenseFeature(dense_keys_.size());
-    metrics::RecordParseSparseFeature(sparse_keys_.size());
   }
 
  protected:
@@ -209,9 +206,7 @@ class ParseExampleDatasetOp : public UnaryDatasetOpKernel {
 
     int64 Cardinality() const override { return input_->Cardinality(); }
 
-    Status CheckExternalState() const override {
-      return input_->CheckExternalState();
-    }
+    bool IsStateful() const override { return input_->IsStateful(); }
 
    protected:
     Status AsGraphDefInternal(SerializationContext* ctx,
@@ -275,11 +270,11 @@ class ParseExampleDatasetOp : public UnaryDatasetOpKernel {
         (*ctx->runner())([this, ctx, prefix, input, output, callback]() {
           thread::ThreadPool* device_threadpool =
               ctx->flr()->device()->tensorflow_cpu_worker_threads()->workers;
-          std::vector<tstring> slice_vec;
+          std::vector<string> slice_vec;
           for (const Tensor& t : input) {
-            auto serialized_t = t.flat<tstring>();
-            gtl::ArraySlice<tstring> slice(serialized_t.data(),
-                                           serialized_t.size());
+            auto serialized_t = t.flat<string>();
+            gtl::ArraySlice<string> slice(serialized_t.data(),
+                                          serialized_t.size());
             for (auto it = slice.begin(); it != slice.end(); it++)
               slice_vec.push_back(*it);
           }
@@ -340,6 +335,8 @@ class ParseExampleDatasetOp : public UnaryDatasetOpKernel {
                   << ", got " << serialized_sparse.shape().DebugString()
                   << ").";
             }
+            // TODO(b/123360128): Add component name to streamz metrics without
+            // breaking TFX metrics.
             if (stats_aggregator) {
               stats_aggregator->IncrementCounter(
                   stats_utils::kExamplesCount, "trainer",

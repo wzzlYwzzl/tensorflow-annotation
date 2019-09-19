@@ -29,8 +29,7 @@ namespace tensorflow {
 namespace profiler {
 namespace cpu {
 
-std::unique_ptr<ProfilerInterface> CreateHostTracer(
-    const ProfilerOptions& options);
+std::unique_ptr<ProfilerInterface> CreateHostTracer();
 
 namespace {
 
@@ -82,8 +81,7 @@ inline ::testing::PolymorphicMatcher<NodeStatsMatcher> EqualsNodeStats(
 TEST(HostTracerTest, CollectsTraceMeEvents) {
   uint32 thread_id = Env::Default()->GetCurrentThreadId();
 
-  const ProfilerOptions options;
-  auto tracer = CreateHostTracer(options);
+  auto tracer = CreateHostTracer();
 
   TF_ASSERT_OK(tracer->Start());
   { TraceMe traceme("hello"); }

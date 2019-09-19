@@ -191,7 +191,6 @@ py_library(
     srcs_version = "PY2AND3",
     deps = [
         ":constants",
-        ":nested_structure_coder",
         "//tensorflow/core:protos_all_py",
         "//tensorflow/python:framework_for_generated_wrappers",
         "//tensorflow/python:lib",
@@ -323,12 +322,9 @@ tf_py_test(
     additional_deps = [
         ":loader",
         ":save",
-        ":save_options",
         ":signature_constants",
         ":tag_constants",
         "@absl_py//absl/testing:parameterized",
-        "//tensorflow/core:protos_all_py",
-        "//tensorflow/python:error_interpolation",
         "//tensorflow/python/eager:def_function",
         "//tensorflow/python/eager:test",
     ],
@@ -486,12 +482,6 @@ py_library(
     deps = [
         "//tensorflow/core:protos_all_py",
         "//tensorflow/python:framework",
-        "//tensorflow/python:tensor_array_ops",
-        "//tensorflow/python/data/ops:dataset_ops",
-        "//tensorflow/python/data/ops:iterator_ops",
-        "//tensorflow/python/data/ops:optional_ops",
-        "//tensorflow/python/distribute:values",
-        "//tensorflow/python/ops/ragged",
         "@six_archive//:six",
     ],
 )

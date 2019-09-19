@@ -49,6 +49,7 @@ from tensorflow.contrib import estimator
 from tensorflow.contrib import factorization
 from tensorflow.contrib import feature_column
 from tensorflow.contrib import framework
+from tensorflow.contrib import gan
 from tensorflow.contrib import graph_editor
 from tensorflow.contrib import grid_rnn
 from tensorflow.contrib import image

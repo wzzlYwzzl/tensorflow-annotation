@@ -27,8 +27,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 namespace mlir {
-class FuncOp;
-template <typename T> class OpPassBase;
+class FunctionPassBase;
 class Region;
 
 /// Displays the CFG in a window. This is for use from the debugger and
@@ -41,9 +40,9 @@ llvm::raw_ostream &writeGraph(llvm::raw_ostream &os, Region &region,
                               bool shortNames = false, const Twine &title = "");
 
 /// Creates a pass to print CFG graphs.
-OpPassBase<FuncOp> *
-createPrintCFGGraphPass(llvm::raw_ostream &os = llvm::errs(),
-                        bool shortNames = false, const llvm::Twine &title = "");
+FunctionPassBase *createPrintCFGGraphPass(llvm::raw_ostream &os = llvm::errs(),
+                                          bool shortNames = false,
+                                          const llvm::Twine &title = "");
 
 } // end namespace mlir
 

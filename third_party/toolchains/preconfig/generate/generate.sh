@@ -58,8 +58,7 @@ echo "CUDA/ROCm: ${GPU_VERSION}"
 echo "CUDNN: ${CUDNN_VERSION}"
 echo "TensorRT: ${TENSORRT_VERSION}"
 
-bazel build --host_force_python=PY2 --define=mount_project="${PWD}" \
-  "${PKG}/generate:${TARGET}"
+bazel build --define=mount_project="${PWD}" "${PKG}/generate:${TARGET}"
 cd "${TEMPDIR}"
 tar xvf "${ROOT}/bazel-bin/${PKG}/generate/${TARGET}_outputs.tar"
 

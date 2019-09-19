@@ -117,7 +117,7 @@ distribute_py_test(
     srcs = ["distribute_strategy_test.py"],
     full_precision = True,
     main = "distribute_strategy_test.py",
-    shard_count = 8,
+    shard_count = 5,
     tags = [
         "multi_and_single_gpu",
         "no_rocm",  # times out on ROCm
@@ -348,7 +348,6 @@ cuda_py_test(
     shard_count = 32,
     tags = [
         "no_oss",  # TODO(b/130369494): Investigate why it times out on OSS.
-        "nomsan",  # b/140958724
         # TODO(b/123307453): Add "multi_and_single_gpu",
     ],
     xla_enable_strict_auto_jit = True,
@@ -397,7 +396,6 @@ cuda_py_test(
     # TODO(b/132384649): Enable once fixed.
     tags = [
         "no_oss",
-        "nomsan",  # b/140958724
     ],
     xla_enable_strict_auto_jit = True,
 )
@@ -415,11 +413,7 @@ cuda_py_test(
         "//tensorflow/python/keras",
     ],
     tags = [
-        "manual",  # b/139844866
         "multi_and_single_gpu",
-        "no_oss",
-        "nomsan",  # b/140958724
-        "notap",
     ],
     xla_enable_strict_auto_jit = True,
 )

@@ -19,10 +19,10 @@
 
 #include "mlir/Dialect/FxpMathOps/FxpMathOps.h"
 #include "mlir/Dialect/FxpMathOps/Passes.h"
-#include "mlir/Dialect/StandardOps/Ops.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/StandardOps/Ops.h"
 
 using namespace mlir;
 using namespace mlir::fxpmath;
@@ -369,10 +369,10 @@ void LowerUniformRealMathPass::runOnFunction() {
   OwningRewritePatternList patterns;
   auto *context = &getContext();
   patterns.insert<UniformRealAddEwPattern, UniformRealMulEwPattern>(context);
-  applyPatternsGreedily(fn, patterns);
+  applyPatternsGreedily(fn, std::move(patterns));
 }
 
-OpPassBase<FuncOp> *mlir::fxpmath::createLowerUniformRealMathPass() {
+FunctionPassBase *mlir::fxpmath::createLowerUniformRealMathPass() {
   return new LowerUniformRealMathPass();
 }
 
@@ -389,10 +389,10 @@ void LowerUniformCastsPass::runOnFunction() {
   OwningRewritePatternList patterns;
   auto *context = &getContext();
   patterns.insert<UniformDequantizePattern>(context);
-  applyPatternsGreedily(fn, patterns);
+  applyPatternsGreedily(fn, std::move(patterns));
 }
 
-OpPassBase<FuncOp> *mlir::fxpmath::createLowerUniformCastsPass() {
+FunctionPassBase *mlir::fxpmath::createLowerUniformCastsPass() {
   return new LowerUniformCastsPass();
 }
 

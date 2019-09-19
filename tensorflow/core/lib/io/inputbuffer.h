@@ -43,8 +43,7 @@ class InputBuffer {
   // If successful, returns OK.  If we are already at the end of the
   // file, we return an OUT_OF_RANGE error.  Otherwise, we return
   // some other non-OK status.
-  template <typename T>
-  Status ReadLine(T* result);
+  Status ReadLine(string* result);
 
   // Reads bytes_to_read bytes into *result, overwriting *result.
   //

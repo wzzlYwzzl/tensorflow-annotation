@@ -232,9 +232,7 @@ REGISTER_XLA_OP(
 
 class ResourceApplyAdagrad : public XlaOpKernel {
  public:
-  explicit ResourceApplyAdagrad(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {
-    OP_REQUIRES_OK(ctx, ctx->GetAttr("update_slots", &update_slots_));
-  }
+  explicit ResourceApplyAdagrad(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {}
 
   void Compile(XlaOpKernelContext* ctx) override {
     DataType type = ctx->input_type(2);
@@ -263,16 +261,11 @@ class ResourceApplyAdagrad : public XlaOpKernel {
     xla::XlaOp lr = ctx->Input(2);
     xla::XlaOp grad = ctx->Input(3);
 
-    if (update_slots_) {
-      accum = accum + xla::Square(grad);
-    }
+    accum = accum + xla::Square(grad);
     var = var - grad * lr * xla::Rsqrt(accum);
     OP_REQUIRES_OK(ctx, ctx->AssignVariable(0, type, var));
     OP_REQUIRES_OK(ctx, ctx->AssignVariable(1, type, accum));
   }
-
- private:
-  bool update_slots_;
 };
 REGISTER_XLA_OP(Name("ResourceApplyAdagrad").TypeConstraint("T", kFloatTypes),
                 ResourceApplyAdagrad);
@@ -280,9 +273,7 @@ REGISTER_XLA_OP(Name("ResourceApplyAdagrad").TypeConstraint("T", kFloatTypes),
 class ResourceApplyAdagradV2 : public XlaOpKernel {
  public:
   explicit ResourceApplyAdagradV2(OpKernelConstruction* ctx)
-      : XlaOpKernel(ctx) {
-    OP_REQUIRES_OK(ctx, ctx->GetAttr("update_slots", &update_slots_));
-  }
+      : XlaOpKernel(ctx) {}
 
   void Compile(XlaOpKernelContext* ctx) override {
     DataType type = ctx->input_type(2);
@@ -317,16 +308,11 @@ class ResourceApplyAdagradV2 : public XlaOpKernel {
     xla::XlaOp epsilon = ctx->Input(3);
     xla::XlaOp grad = ctx->Input(4);
 
-    if (update_slots_) {
-      accum = accum + xla::Square(grad);
-    }
+    accum = accum + xla::Square(grad);
     var = var - grad * lr / (xla::Sqrt(accum) + epsilon);
     OP_REQUIRES_OK(ctx, ctx->AssignVariable(0, type, var));
     OP_REQUIRES_OK(ctx, ctx->AssignVariable(1, type, accum));
   }
-
- private:
-  bool update_slots_;
 };
 REGISTER_XLA_OP(Name("ResourceApplyAdagradV2").TypeConstraint("T", kFloatTypes),
                 ResourceApplyAdagradV2);
@@ -467,7 +453,6 @@ class ResourceApplyAdam : public XlaOpKernel {
  public:
   explicit ResourceApplyAdam(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {
     OP_REQUIRES_OK(ctx, ctx->GetAttr("T", &dtype_));
-    OP_REQUIRES_OK(ctx, ctx->GetAttr("use_nesterov", &use_nesterov_));
   }
 
   void Compile(XlaOpKernelContext* ctx) override {
@@ -528,33 +513,23 @@ class ResourceApplyAdam : public XlaOpKernel {
     // alpha <- learning_rate * sqrt(1 - beta2^t) / (1 - beta1^t)
     // m_t <- beta1 * m_{t-1} + (1 - beta1) * g_t
     // v_t <- beta2 * v_{t-1} + (1 - beta2) * g_t * g_t
-    // if use_nesterov:
-    //   variable <- variable - alpha * m_t / (sqrt(v_t) + epsilon)
-    // if not use_nesterov:
-    //   variable <- variable - alpha * (m_t * beta1 + (1 - beta1) * g_t) /
-    //   (sqrt(v_t) + epsilon)
+    // variable <- variable - alpha * m_t / (sqrt(v_t) + epsilon)
 
     xla::XlaBuilder* b = ctx->builder();
     xla::XlaOp one = XlaHelpers::FloatLiteral(b, dtype_, 1.0);
 
     xla::XlaOp alpha = lr * xla::Sqrt(one - beta2_power) / (one - beta1_power);
-    auto m_t = m + (grad - m) * (one - beta1);
+    m = m + (grad - m) * (one - beta1);
     v = v + (xla::Square(grad) - v) * (one - beta2);
-    if (use_nesterov_) {
-      var = var - alpha * (m_t * beta1 + (one - beta1) * grad) /
-                      (xla::Sqrt(v) + epsilon);
-    } else {
-      var = var - m_t * alpha / (xla::Sqrt(v) + epsilon);
-    }
+    var = var - m * alpha / (xla::Sqrt(v) + epsilon);
 
     OP_REQUIRES_OK(ctx, ctx->AssignVariable(0, dtype_, var));
-    OP_REQUIRES_OK(ctx, ctx->AssignVariable(1, dtype_, m_t));
+    OP_REQUIRES_OK(ctx, ctx->AssignVariable(1, dtype_, m));
     OP_REQUIRES_OK(ctx, ctx->AssignVariable(2, dtype_, v));
   }
 
  private:
   DataType dtype_;
-  bool use_nesterov_;
 };
 REGISTER_XLA_OP(Name("ResourceApplyAdam").TypeConstraint("T", kFloatTypes),
                 ResourceApplyAdam);

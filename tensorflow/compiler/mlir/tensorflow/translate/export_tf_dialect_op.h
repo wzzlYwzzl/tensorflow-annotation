@@ -24,13 +24,9 @@ limitations under the License.
 namespace tensorflow {
 
 // Converts an MLIR operation to TensorFlow NodeDef with given node name. This
-// name should be unique to the graph it is being inserted to. If the
-// `ignore_unregistered_attrs` argument is set to true, the attributes which are
-// not in the op registry will be ignored. Set it to true if the returned
-// NodeDef will be excuted by the linked TF Eager runtime.
+// name should be unique to the graph it is being inserted to.
 stream_executor::port::StatusOr<std::unique_ptr<NodeDef>>
-ConvertTFDialectOpToNodeDef(mlir::Operation* inst, llvm::StringRef name,
-                            bool ignore_unregistered_attrs);
+ConvertTFDialectOpToNodeDef(mlir::Operation* inst, llvm::StringRef name);
 
 }  // namespace tensorflow
 

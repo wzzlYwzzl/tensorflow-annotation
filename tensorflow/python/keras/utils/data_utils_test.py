@@ -21,6 +21,8 @@ from __future__ import print_function
 from itertools import cycle
 import os
 import tarfile
+import threading
+import unittest
 import zipfile
 
 import numpy as np
@@ -28,7 +30,6 @@ from six.moves.urllib.parse import urljoin
 from six.moves.urllib.request import pathname2url
 
 from tensorflow.python import keras
-from tensorflow.python.keras.utils import data_utils
 from tensorflow.python.platform import test
 
 
@@ -88,6 +89,47 @@ class TestGetFileAndValidateIt(test.TestCase):
     self.assertTrue(keras.utils.data_utils.validate_file(path, hashval_md5))
 
 
+class ThreadsafeIter(object):
+
+  def __init__(self, it):
+    self.it = it
+    self.lock = threading.Lock()
+
+    # After a generator throws an exception all subsequent next() calls raise a
+    # StopIteration Exception. This, however, presents an issue when mixing
+    # generators and threading because it means the order of retrieval need not
+    # match the order in which the generator was called. This can make it appear
+    # that a generator exited normally when in fact the terminating exception is
+    # just in a different thread. In order to provide thread safety, once
+    # self.it has thrown an exception we continue to throw the same exception.
+    self._exception = None
+
+  def __iter__(self):
+    return self
+
+  def __next__(self):
+    return self.next()
+
+  def next(self):
+    with self.lock:
+      if self._exception:
+        raise self._exception  # pylint: disable=raising-bad-type
+
+      try:
+        return next(self.it)
+      except Exception as e:
+        self._exception = e
+        raise
+
+
+def threadsafe_generator(f):
+
+  def g(*a, **kw):
+    return ThreadsafeIter(f(*a, **kw))
+
+  return g
+
+
 class TestSequence(keras.utils.data_utils.Sequence):
 
   def __init__(self, shape, value=1.):
@@ -113,7 +155,7 @@ class FaultSequence(keras.utils.data_utils.Sequence):
     return 100
 
 
-@data_utils.threadsafe_generator
+@threadsafe_generator
 def create_generator_from_sequence_threads(ds):
   for i in cycle(range(len(ds))):
     yield ds[i]
@@ -139,15 +181,17 @@ class TestEnqueuers(test.TestCase):
     self.assertEqual(len(set(acc) - set(range(100))), 0)
     enqueuer.stop()
 
-  @data_utils.dont_use_multiprocessing_pool
+  @unittest.skipIf(
+      os.name == 'nt',
+      'use_multiprocessing=True does not work on windows properly.')
   def test_generator_enqueuer_processes(self):
     enqueuer = keras.utils.data_utils.GeneratorEnqueuer(
-        create_generator_from_sequence_threads(TestSequence([3, 200, 200, 3])),
+        create_generator_from_sequence_pcs(TestSequence([3, 200, 200, 3])),
         use_multiprocessing=True)
-    enqueuer.start(4, 10)
+    enqueuer.start(3, 10)
     gen_output = enqueuer.get()
     acc = []
-    for _ in range(300):
+    for _ in range(100):
       acc.append(int(next(gen_output)[0, 0, 0, 0]))
     self.assertNotEqual(acc, list(range(100)))
     enqueuer.stop()
@@ -161,10 +205,12 @@ class TestEnqueuers(test.TestCase):
     with self.assertRaises(IndexError):
       next(gen_output)
 
-  @data_utils.dont_use_multiprocessing_pool
+  @unittest.skipIf(
+      os.name == 'nt',
+      'use_multiprocessing=True does not work on windows properly.')
   def test_generator_enqueuer_fail_processes(self):
     enqueuer = keras.utils.data_utils.GeneratorEnqueuer(
-        create_generator_from_sequence_threads(FaultSequence()),
+        create_generator_from_sequence_pcs(FaultSequence()),
         use_multiprocessing=True)
     enqueuer.start(3, 10)
     gen_output = enqueuer.get()
@@ -182,7 +228,6 @@ class TestEnqueuers(test.TestCase):
     self.assertEqual(acc, list(range(100)))
     enqueuer.stop()
 
-  @data_utils.dont_use_multiprocessing_pool
   def test_ordered_enqueuer_processes(self):
     enqueuer = keras.utils.data_utils.OrderedEnqueuer(
         TestSequence([3, 200, 200, 3]), use_multiprocessing=True)
@@ -202,7 +247,6 @@ class TestEnqueuers(test.TestCase):
     with self.assertRaises(IndexError):
       next(gen_output)
 
-  @data_utils.dont_use_multiprocessing_pool
   def test_ordered_enqueuer_fail_processes(self):
     enqueuer = keras.utils.data_utils.OrderedEnqueuer(
         FaultSequence(), use_multiprocessing=True)
@@ -211,7 +255,6 @@ class TestEnqueuers(test.TestCase):
     with self.assertRaises(IndexError):
       next(gen_output)
 
-  @data_utils.dont_use_multiprocessing_pool
   def test_on_epoch_end_processes(self):
     enqueuer = keras.utils.data_utils.OrderedEnqueuer(
         TestSequence([3, 200, 200, 3]), use_multiprocessing=True)
@@ -224,7 +267,6 @@ class TestEnqueuers(test.TestCase):
     self.assertEqual(acc[100:], list([k * 5 for k in range(100)]))
     enqueuer.stop()
 
-  @data_utils.dont_use_multiprocessing_pool
   def test_context_switch(self):
     enqueuer = keras.utils.data_utils.OrderedEnqueuer(
         TestSequence([3, 200, 200, 3]), use_multiprocessing=True)

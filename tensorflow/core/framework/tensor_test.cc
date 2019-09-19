@@ -94,7 +94,6 @@ TEST(TensorTest, DataType_Traits) {
   EXPECT_TRUE(std::is_trivial<int8>::value);
   EXPECT_TRUE(std::is_trivial<int64>::value);
   EXPECT_TRUE(std::is_trivial<bool>::value);
-  EXPECT_FALSE(std::is_trivial<tstring>::value);
   EXPECT_FALSE(std::is_trivial<string>::value);
 
   EXPECT_EQ(sizeof(bool), 1);
@@ -481,7 +480,7 @@ TEST_F(TensorReshapeTest, ReshapeError) {
 
   Tensor string_tensor{DT_STRING, {10}};
   // Note that the error message compare # of elements, not # of bytes.
-  EXPECT_DEATH((string_tensor.bit_casted_shaped<tstring, 1>({9})), "9 vs. 10");
+  EXPECT_DEATH((string_tensor.bit_casted_shaped<string, 1>({9})), "9 vs. 10");
 }
 
 TEST_F(TensorReshapeTest, Flat) {
@@ -796,27 +795,27 @@ TEST(Tensor_Scalar, Basics) {
   {
     Tensor t(DT_STRING, TensorShape({}));
     EXPECT_EQ(1, t.NumElements());
-    auto Tt = t.scalar<tstring>();
+    auto Tt = t.scalar<string>();
     EXPECT_EQ(1, Tt.size());
     EXPECT_EQ(0, Tt.rank());
-    t.scalar<tstring>()() = "foo";
+    t.scalar<string>()() = "foo";
     EXPECT_EQ("foo", Tt());
   }
   {
     Tensor t(DT_STRING, TensorShape({1}));
     EXPECT_EQ(1, t.NumElements());
-    auto Tt = t.vec<tstring>();
+    auto Tt = t.vec<string>();
     EXPECT_EQ(1, Tt.size());
-    t.flat<tstring>()(0) = "foo";
+    t.flat<string>()(0) = "foo";
     EXPECT_EQ("foo", Tt(0));
   }
   {
     Tensor t(DT_STRING, TensorShape({1, 1, 1}));
     EXPECT_EQ(1, t.NumElements());
-    auto Tt = t.scalar<tstring>();
+    auto Tt = t.scalar<string>();
     EXPECT_EQ(1, Tt.size());
     EXPECT_EQ(0, Tt.rank());
-    t.flat<tstring>()(0) = "bar";
+    t.flat<string>()(0) = "bar";
     EXPECT_EQ("bar", Tt());
   }
   {
@@ -861,7 +860,7 @@ TEST(Tensor_HostScalar, Basics) {
     Tensor t("fooooooooooooooooooooooooooooooooooooo");
     EXPECT_EQ(DT_STRING, t.dtype());
     EXPECT_EQ(1, t.NumElements());
-    auto Tt = t.scalar<tstring>();
+    auto Tt = t.scalar<string>();
     EXPECT_EQ(1, Tt.size());
     EXPECT_EQ(0, Tt.rank());
     EXPECT_EQ("fooooooooooooooooooooooooooooooooooooo", Tt());
@@ -904,15 +903,15 @@ TEST(Tensor_Float, Reshape_And_Slice_Assignment) {
 }
 
 TEST(Tensor_String, Simple) {
-  Tensor t = test::AsTensor<tstring>(
+  Tensor t = test::AsTensor<string>(
       {"hello", "world", "machine", "learning", "new", "york"},
       TensorShape({3, 2}));
   auto s = t.shape();
   ASSERT_EQ(s.dims(), 2);
   ASSERT_EQ(s.dim_size(0), 3);
   ASSERT_EQ(s.dim_size(1), 2);
-  auto m = t.matrix<tstring>();
-  EXPECT_EQ(t.TotalBytes(), 3 * 2 * sizeof(tstring) + 5 + 5 + 7 + 8 + 3 + 4);
+  auto m = t.matrix<string>();
+  EXPECT_EQ(t.TotalBytes(), 3 * 2 * sizeof(string) + 5 + 5 + 7 + 8 + 3 + 4);
 
   EXPECT_EQ(m(0, 0), "hello");
   EXPECT_EQ(m(0, 1), "world");
@@ -921,7 +920,7 @@ TEST(Tensor_String, Simple) {
   EXPECT_EQ(m(2, 0), "new");
   EXPECT_EQ(m(2, 1), "york");
 
-  TestCopies<tstring>(t);
+  TestCopies<string>(t);
 }
 
 TEST(Tensor_Float, SimpleWithHelper) {
@@ -977,16 +976,16 @@ TEST(Tensor_Int64, SimpleWithHelper) {
 }
 
 TEST(Tensor_String, SimpleWithHelper) {
-  Tensor t1 = test::AsTensor<tstring>({"0", "1", "2", "3", "4", "5"}, {2, 3});
+  Tensor t1 = test::AsTensor<string>({"0", "1", "2", "3", "4", "5"}, {2, 3});
   Tensor t2(DT_STRING, {2, 3});
   for (int i = 0; i < 2; ++i) {
     for (int j = 0; j < 3; ++j) {
-      t2.matrix<tstring>()(i, j) = strings::StrCat(i * 3 + j);
+      t2.matrix<string>()(i, j) = strings::StrCat(i * 3 + j);
     }
   }
 
   // Test with helper.
-  test::ExpectTensorEqual<tstring>(t1, t2);
+  test::ExpectTensorEqual<string>(t1, t2);
 }
 
 TEST(Tensor_Bool, SimpleWithHelper) {
@@ -1164,7 +1163,7 @@ TEST(Tensor, FailureToAllocate) {
   // String
   {
     Tensor t(DT_STRING, TensorShape({1}));
-    t.vec<tstring>()(0) = "foo";
+    t.vec<string>()(0) = "foo";
     TensorProto proto;
     t.AsProtoField(&proto);
 
@@ -1366,11 +1365,11 @@ TEST(SummarizeValue, BOOL) {
 }
 
 TEST(SummarizeValue, STRING) {
-  Tensor x = MkTensor<tstring>(DT_STRING, TensorShape({5}),
-                               {"one", "two", "three", "four", "five"});
+  Tensor x = MkTensor<string>(DT_STRING, TensorShape({5}),
+                              {"one", "two", "three", "four", "five"});
   EXPECT_EQ("one two three four five", x.SummarizeValue(16));
-  x = MkTensor<tstring>(DT_STRING, TensorShape({5, 1, 5}),
-                        {"one", "two", "three", "four", "five"});
+  x = MkTensor<string>(DT_STRING, TensorShape({5, 1, 5}),
+                       {"one", "two", "three", "four", "five"});
   EXPECT_EQ("[[one two three four five]][[one...]]...", x.SummarizeValue(6));
 }
 
@@ -1422,16 +1421,16 @@ TEST(SummarizeValue, BOOL_PRINT_V2) {
 }
 
 TEST(SummarizeValue, STRING_PRINT_V2) {
-  Tensor x = MkTensor<tstring>(DT_STRING, TensorShape({5}),
-                               {"one", "two", "three", "four", "five"});
+  Tensor x = MkTensor<string>(DT_STRING, TensorShape({5}),
+                              {"one", "two", "three", "four", "five"});
   EXPECT_EQ("[\"one\" \"two\" \"three\" \"four\" \"five\"]",
             x.SummarizeValue(16, true));
   EXPECT_EQ("[\"one\" \"two\" \"three\" \"four\" \"five\"]",
             x.SummarizeValue(-1, true));
   EXPECT_EQ("[\"one\" \"two\" ... \"four\" \"five\"]",
             x.SummarizeValue(2, true));
-  x = MkTensor<tstring>(DT_STRING, TensorShape({2, 2}),
-                        {"one", "two", "three", "four", "five"});
+  x = MkTensor<string>(DT_STRING, TensorShape({2, 2}),
+                       {"one", "two", "three", "four", "five"});
   EXPECT_EQ("[[\"one\" \"two\"]\n [\"three\" \"four\"]]",
             x.SummarizeValue(16, true));
 }

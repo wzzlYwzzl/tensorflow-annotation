@@ -34,7 +34,6 @@ from tensorflow.python.keras.utils import data_utils
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import random_ops
-from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.util import nest
 from tensorflow.python.util import tf_inspect
 
@@ -209,7 +208,6 @@ class TensorLikeDataAdapter(DataAdapter):
                x,
                y=None,
                sample_weights=None,
-               sample_weight_modes=None,
                batch_size=None,
                epochs=1,
                steps=None,
@@ -220,17 +218,15 @@ class TensorLikeDataAdapter(DataAdapter):
     y = _process_numpy_inputs(y)
     sample_weights = _process_numpy_inputs(sample_weights)
 
-    any_sample_weight = sample_weights is not None and any(
-        w is not None for w in sample_weights)
-    partial_sample_weight = any_sample_weight and any(
-        w is None for w in sample_weights)
-
     # If sample_weights are not specified for an output use 1.0 as weights.
-    if partial_sample_weight:
-      sample_weights = handle_partial_sample_weights(y, sample_weights,
-                                                     sample_weight_modes)
+    if sample_weights is not None and any(w is None for w in sample_weights):
+      weight = next(s for s in sample_weights if s is not None)
+      sample_weights = training_utils.list_to_tuple([
+          array_ops.ones((weight.shape[0],)) if sw is None else sw
+          for sw in sample_weights
+      ])
 
-    if y is not None and any_sample_weight:
+    if y is not None and sample_weights is not None:
       inputs = (x, y, sample_weights)
     elif y is not None:
       # Sample weight is only needed for training, so if y is None, then
@@ -275,8 +271,7 @@ class TensorLikeDataAdapter(DataAdapter):
     # 4. optimized permutation batching
     # 5. disabled static optimizations
 
-    indices_dataset = dataset_ops.DatasetV2.range(1).repeat(epochs)
-
+    indices_dataset = dataset_ops.DatasetV2.range(1).repeat()
     def permutation(_):
       # It turns out to be more performant to make a new set of indices rather
       # than reusing the same range Tensor. (presumably because of buffer
@@ -383,32 +378,23 @@ class CompositeTensorDataAdapter(DataAdapter):
     return (any(_is_composite(v) for v in flat_inputs) and
             all(_is_tensor_or_composite(v) for v in flat_inputs))
 
-  def __init__(self,
-               x,
-               y=None,
-               sample_weights=None,
-               sample_weight_modes=None,
-               batch_size=None,
-               steps=None,
-               shuffle=False,
-               **kwargs):
+  def __init__(self, x, y=None, sample_weights=None, batch_size=None,
+               steps=None, shuffle=False, **kwargs):
     super(CompositeTensorDataAdapter, self).__init__(x, y, **kwargs)
     x = _process_numpy_inputs(x)
     y = _process_numpy_inputs(y)
     sample_weights = _process_numpy_inputs(sample_weights)
 
-    any_sample_weight = sample_weights is not None and any(
-        w is not None for w in sample_weights)
-    partial_sample_weight = any_sample_weight and any(
-        w is None for w in sample_weights)
-
-    # Handle partial sample weights.
     # If sample_weights are not specified for an output use 1.0 as weights.
-    if partial_sample_weight:
-      sample_weights = handle_partial_sample_weights(y, sample_weights,
-                                                     sample_weight_modes)
+    if (sample_weights is not None and
+        any([sw is None for sw in sample_weights])):
+      weight = next(s for s in sample_weights if s is not None)
+      sample_weights = training_utils.list_to_tuple([
+          array_ops.ones((weight.shape[0],)) if sw is None else sw
+          for sw in sample_weights
+      ])
 
-    if y is not None and any_sample_weight:
+    if y is not None and sample_weights is not None:
       inputs = (x, y, sample_weights)
     elif y is not None:
       # Sample weight is only needed for training, so if y is None, then
@@ -478,14 +464,9 @@ class ListsOfScalarsDataAdapter(DataAdapter):
       return ListsOfScalarsDataAdapter._is_list_of_scalars(inp[0])
     return False
 
-  def __init__(self,
-               x,
-               y=None,
-               sample_weights=None,
-               sample_weight_modes=None,
-               batch_size=None,
-               shuffle=False,
-               **kwargs):
+  def __init__(
+      self, x, y=None, sample_weights=None, batch_size=None,
+      shuffle=False, **kwargs):
     super(ListsOfScalarsDataAdapter, self).__init__(x, y, **kwargs)
     x = np.asarray(x)
     if y is not None:
@@ -494,13 +475,8 @@ class ListsOfScalarsDataAdapter(DataAdapter):
       sample_weights = np.asarray(sample_weights)
 
     self._internal_adapter = TensorLikeDataAdapter(
-        x,
-        y=y,
-        sample_weights=sample_weights,
-        sample_weight_modes=sample_weight_modes,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        **kwargs)
+        x, y=y, sample_weights=sample_weights,
+        batch_size=batch_size, shuffle=shuffle, **kwargs)
 
   def get_dataset(self):
     return self._internal_adapter.get_dataset()
@@ -561,8 +537,7 @@ class GeneratorDataAdapter(DataAdapter):
   def can_handle(x, y=None):
     return tf_inspect.isgenerator(x)
 
-  def __init__(self, x, y=None, sample_weights=None, workers=1,
-               use_multiprocessing=False, max_queue_size=10, **kwargs):
+  def __init__(self, x, y=None, sample_weights=None, **kwargs):
     super(GeneratorDataAdapter, self).__init__(x, y, **kwargs)
     if not is_none_or_empty(y):
       raise ValueError("`y` argument is not supported when using "
@@ -583,24 +558,12 @@ class GeneratorDataAdapter(DataAdapter):
     nested_shape = nest.map_structure(dynamic_shape_like, peek)
     # Note that dataset API takes a callable that creates a generator object,
     # rather than generator itself, which is why we define a function here.
-    if workers > 0:
-      if use_multiprocessing:
-        logging.warning(
-            UserWarning("Using a generator with `use_multiprocessing=True` "
-                        "and multiple workers may duplicate your data. "
-                        "Please consider using the `tf.data.Dataset`."))
-      def generator_fn():
-        enqueuer = data_utils.GeneratorEnqueuer(
-            itertools.chain([peek], x), use_multiprocessing=use_multiprocessing)
-        enqueuer.start(workers=workers, max_queue_size=max_queue_size)
-        return enqueuer.get()
-    else:
-      def generator_fn():
-        return itertools.chain([peek], x)
+    def reassemble():
+      return itertools.chain([peek], x)
 
     self._first_batch_size = int(nest.flatten(peek)[0].shape[0])
     self._dataset = dataset_ops.DatasetV2.from_generator(
-        generator_fn, nested_dtypes, output_shapes=nested_shape)
+        reassemble, nested_dtypes, output_shapes=nested_shape)
 
   def get_dataset(self):
     return self._dataset
@@ -628,8 +591,7 @@ class KerasSequenceAdapter(DataAdapter):
   def can_handle(x, y=None):
     return isinstance(x, data_utils.Sequence)
 
-  def __init__(self, x, y=None, sample_weights=None, shuffle=False, workers=1,
-               use_multiprocessing=False, max_queue_size=10, **kwargs):
+  def __init__(self, x, y=None, sample_weights=None, shuffle=False, **kwargs):
     super(KerasSequenceAdapter, self).__init__(x, y, **kwargs)
     if not is_none_or_empty(y):
       raise ValueError("`y` argument is not supported when using "
@@ -644,17 +606,10 @@ class KerasSequenceAdapter(DataAdapter):
     nested_dtypes = nest.map_structure(lambda t: t.dtype, peek)
     nested_shape = nest.map_structure(dynamic_shape_like, peek)
 
-    if workers > 0:
-      def generator_fn():
-        enqueuer = data_utils.OrderedEnqueuer(
-            x, use_multiprocessing=use_multiprocessing)
-        enqueuer.start(workers=workers, max_queue_size=max_queue_size)
-        return enqueuer.get()
-    else:
-      def generator_fn():
-        for i in range(len(x)):
-          yield x[i]
-    dataset = dataset_ops.DatasetV2.from_generator(generator_fn, nested_dtypes,
+    def generator():
+      for i in range(len(x)):
+        yield x[i]
+    dataset = dataset_ops.DatasetV2.from_generator(generator, nested_dtypes,
                                                    output_shapes=nested_shape)
     if shuffle:
       dataset = dataset.shuffle(len(x))
@@ -759,29 +714,3 @@ def is_none_or_empty(inputs):
   # "The truth value of an array with more than one element is ambiguous.
   # Use a.any() or a.all()"
   return inputs is None or not nest.flatten(inputs)
-
-
-def handle_partial_sample_weights(outputs, sample_weights, sample_weight_modes):
-  """Adds 1.0 as sample weights for the outputs for which there is no weight.
-
-  Args:
-    outputs: List of model outputs.
-    sample_weights: List of sample weight inputs.
-    sample_weight_modes: List of sample weight modes or None.
-
-  Returns:
-    Tuple of sample weights, one sample weight for every output.
-  """
-  new_sample_weights = []
-  for i, sw in enumerate(sample_weights):
-    if sw is None:
-      output_shape = outputs[i].shape
-      is_temporal = (
-          sample_weight_modes is not None and
-          sample_weight_modes[i] == "temporal")
-      sw_shape = (output_shape[0],
-                  output_shape[1]) if is_temporal else (output_shape[0],)
-      new_sample_weights.append(array_ops.ones(sw_shape))
-    else:
-      new_sample_weights.append(sw)
-  return training_utils.list_to_tuple(new_sample_weights)

@@ -19,7 +19,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/layout_util.h"
 #include "tensorflow/compiler/xla/service/hlo_instruction.h"
 #include "tensorflow/compiler/xla/util.h"
-#include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/gtl/cleanup.h"
 #include "tensorflow/core/lib/io/path.h"
 #include "tensorflow/core/platform/cuda_libdevice_path.h"
@@ -202,7 +201,10 @@ StatusOr<std::unique_ptr<se::KernelBase>> CreateKernel(
   }
 
   auto kernel_base = absl::make_unique<se::KernelBase>(stream_exec);
-  TF_RETURN_IF_ERROR(stream_exec->GetKernel(loader_spec, kernel_base.get()));
+  if (!stream_exec->GetKernel(loader_spec, kernel_base.get())) {
+    return InternalError("Unable to load kernel '%s'", kernel_name);
+  }
+
   return std::move(kernel_base);
 }
 
@@ -215,14 +217,19 @@ Status ExecuteKernelOnStream(const se::KernelBase& kernel,
   for (const se::DeviceMemoryBase& buf : args) {
     kernel_args->add_device_memory_argument(buf);
   }
-  return stream->parent()->Launch(stream, se::ThreadDim(threads_per_block),
-                                  se::BlockDim(block_count), kernel,
-                                  *kernel_args);
+
+  if (!stream->parent()->Launch(stream, se::ThreadDim(threads_per_block),
+                                se::BlockDim(block_count), kernel,
+                                *kernel_args)) {
+    return InternalError("Unable to launch kernel");
+  }
+  return Status::OK();
 }
 
-se::GpuAsmOpts PtxOptsFromConfig(const HloModuleConfig& hlo_module_config) {
-  return se::GpuAsmOpts(
-      hlo_module_config.debug_options().xla_gpu_disable_gpuasm_optimizations(),
+se::cuda::PtxCompilationOptions PtxOptsFromConfig(
+    const HloModuleConfig& hlo_module_config) {
+  return se::cuda::PtxCompilationOptions(
+      hlo_module_config.debug_options().xla_gpu_disable_ptxas_optimizations(),
       hlo_module_config.debug_options().xla_gpu_cuda_data_dir());
 }
 
@@ -244,6 +251,10 @@ template <typename T>
 static void InitializeTypedBuffer(se::Stream* stream,
                                   se::DeviceMemoryBase buffer,
                                   int64* rng_state) {
+  static_assert(
+      std::is_floating_point<T>::value || std::is_same<T, Eigen::half>::value,
+      "Unimplemented for integers yet.");
+
   // Accesses to static variables are not locked, since the caller is already
   // in a critical section.
   static std::vector<T>* host_buffer = [] {
@@ -252,23 +263,13 @@ static void InitializeTypedBuffer(se::Stream* stream,
     // Default-seeded random numbers.
     std::mt19937 gen;
     for (auto& element : *ret) {
-      // Only double gets random values in double.  Other data types get random
-      // values in float then cast them to the target data types.
-      using RandomFloatingPointType =
+      using RandomType =
           typename std::conditional<std::is_same<T, Eigen::half>::value, float,
                                     T>::type;
-      using RandomType =
-          typename std::conditional<std::is_integral<T>::value, float,
-                                    RandomFloatingPointType>::type;
       // Scale down the values for fp16 to have less overflows.
       auto upper_bound =
           RandomType(std::is_same<T, Eigen::half>::value ? 0.1 : 1.0);
-      auto rand_val = UniformDistribution(RandomType(0), upper_bound, &gen);
-      // For float or double, it is between [0,1].
-      // For fp16, it ranges between [0, 0.1].
-      // For integer types, element is either 0 or 1 for less overflows
-      // especially for int8.
-      element = T(std::is_integral<T>::value ? rand_val + 0.5 : rand_val);
+      element = T(UniformDistribution(RandomType(0), upper_bound, &gen));
     }
     return ret;
   }();
@@ -294,8 +295,8 @@ static void InitializeTypedBuffer(se::Stream* stream,
   }
 }
 
-void InitializeBuffer(se::Stream* stream, PrimitiveType buffer_type,
-                      int64* rng_state, se::DeviceMemoryBase buffer) {
+void InitializeFloatBuffer(se::Stream* stream, PrimitiveType buffer_type,
+                           int64* rng_state, se::DeviceMemoryBase buffer) {
   switch (buffer_type) {
     case xla::F16:
       return InitializeTypedBuffer<Eigen::half>(stream, buffer, rng_state);
@@ -305,8 +306,6 @@ void InitializeBuffer(se::Stream* stream, PrimitiveType buffer_type,
     case xla::F64:
     case xla::C128:
       return InitializeTypedBuffer<double>(stream, buffer, rng_state);
-    case xla::S8:
-      return InitializeTypedBuffer<int8>(stream, buffer, rng_state);
     default:
       LOG(FATAL) << "Unexpected type";
   }

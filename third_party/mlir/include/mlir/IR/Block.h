@@ -23,7 +23,6 @@
 #define MLIR_IR_BLOCK_H
 
 #include "mlir/IR/Value.h"
-#include "mlir/IR/Visitors.h"
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/ilist.h"
 #include "llvm/ADT/ilist_node.h"
@@ -96,8 +95,9 @@ public:
   /// Blocks are maintained in a Region.
   Region *getParent();
 
-  /// Returns the closest surrounding operation that contains this block.
-  Operation *getParentOp();
+  /// Returns the closest surrounding operation that contains this block or
+  /// nullptr if this is a top-level block.
+  Operation *getContainingOp();
 
   /// Return if this block is the entry block in the parent region.
   bool isEntryBlock();
@@ -290,35 +290,20 @@ public:
 
   /// Walk the operations in this block in postorder, calling the callback for
   /// each operation.
-  /// See Operation::walk for more details.
-  template <typename FnT, typename RetT = detail::walkResultType<FnT>>
-  RetT walk(FnT &&callback) {
-    return walk(begin(), end(), std::forward<FnT>(callback));
+  void walk(llvm::function_ref<void(Operation *)> callback);
+
+  /// Specialization of walk to only visit operations of 'OpTy'.
+  template <typename OpTy> void walk(llvm::function_ref<void(OpTy)> callback) {
+    walk([&](Operation *opInst) {
+      if (auto op = dyn_cast<OpTy>(opInst))
+        callback(op);
+    });
   }
 
   /// Walk the operations in the specified [begin, end) range of this block in
-  /// postorder, calling the callback for each operation. This method is invoked
-  /// for void return callbacks.
-  /// See Operation::walk for more details.
-  template <typename FnT, typename RetT = detail::walkResultType<FnT>>
-  typename std::enable_if<std::is_same<RetT, void>::value, RetT>::type
-  walk(Block::iterator begin, Block::iterator end, FnT &&callback) {
-    for (auto &op : llvm::make_early_inc_range(llvm::make_range(begin, end)))
-      detail::walkOperations(&op, callback);
-  }
-
-  /// Walk the operations in the specified [begin, end) range of this block in
-  /// postorder, calling the callback for each operation. This method is invoked
-  /// for interruptible callbacks.
-  /// See Operation::walk for more details.
-  template <typename FnT, typename RetT = detail::walkResultType<FnT>>
-  typename std::enable_if<std::is_same<RetT, WalkResult>::value, RetT>::type
-  walk(Block::iterator begin, Block::iterator end, FnT &&callback) {
-    for (auto &op : llvm::make_early_inc_range(llvm::make_range(begin, end)))
-      if (detail::walkOperations(&op, callback).wasInterrupted())
-        return WalkResult::interrupt();
-    return WalkResult::advance();
-  }
+  /// postorder, calling the callback for each operation.
+  void walk(Block::iterator begin, Block::iterator end,
+            llvm::function_ref<void(Operation *)> callback);
 
   //===--------------------------------------------------------------------===//
   // Other
@@ -388,7 +373,7 @@ struct ilist_traits<::mlir::Block> : public ilist_alloc_traits<::mlir::Block> {
                              block_iterator first, block_iterator last);
 
 private:
-  mlir::Region *getParentRegion();
+  mlir::Region *getContainingRegion();
 };
 } // end namespace llvm
 

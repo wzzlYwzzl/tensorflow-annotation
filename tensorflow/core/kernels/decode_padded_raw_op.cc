@@ -39,7 +39,7 @@ class DecodePaddedRawOp : public OpKernel {
 
   void Compute(OpKernelContext* context) override {
     const auto& input = context->input(0);
-    auto flat_in = input.flat<tstring>();
+    auto flat_in = input.flat<string>();
 
     int fixed_length;
     const auto& length_input = context->input(1);

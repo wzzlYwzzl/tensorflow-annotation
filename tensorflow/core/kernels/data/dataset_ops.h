@@ -24,14 +24,9 @@ namespace data {
 
 class DatasetToGraphOp : public OpKernel {
  public:
-  static constexpr const char* const kAllowStateful = "allow_stateful";
-
-  explicit DatasetToGraphOp(OpKernelConstruction* ctx);
+  explicit DatasetToGraphOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
 
   void Compute(OpKernelContext* ctx) override;
-
- private:
-  bool allow_stateful_ops_ = false;
 };
 
 class DatasetCardinalityOp : public OpKernel {

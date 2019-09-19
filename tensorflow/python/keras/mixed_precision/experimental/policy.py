@@ -244,8 +244,7 @@ class Policy(object):
         if float32_vars:
           error += (' The value %s ends with _with_float32_vars, but %s cannot '
                     'be converted to a DType' % (name, base_name))
-        # six.raise_from supresses the original TypeError from being raised
-        six.raise_from(ValueError(error), None)
+        raise ValueError(error)
 
     if float32_vars:
       return base_dtype, 'float32'

@@ -31,7 +31,7 @@ namespace tensorflow {
 class TestWorkerInterface : public WorkerInterface {
  public:
   void GetStatusAsync(const GetStatusRequest* request,
-                      GetStatusResponse* response, bool fail_fast,
+                      GetStatusResponse* response,
                       StatusCallback done) override {
     done(errors::Unimplemented("GetStatusAsync"));
   }

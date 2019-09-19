@@ -20,22 +20,22 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/AffineOps/AffineOps.h"
 #include "mlir/Analysis/LoopAnalysis.h"
 #include "mlir/Analysis/NestedMatcher.h"
 #include "mlir/Analysis/SliceAnalysis.h"
 #include "mlir/Analysis/Utils.h"
 #include "mlir/Analysis/VectorAnalysis.h"
-#include "mlir/Dialect/AffineOps/AffineOps.h"
-#include "mlir/Dialect/StandardOps/Ops.h"
-#include "mlir/Dialect/VectorOps/VectorOps.h"
 #include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/Types.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/StandardOps/Ops.h"
 #include "mlir/Support/Functional.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/Passes.h"
+#include "mlir/VectorOps/VectorOps.h"
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -814,15 +814,14 @@ static LogicalResult vectorizeRootOrTerminal(Value *iv,
   // as needed by various targets.
   if (auto load = dyn_cast<AffineLoadOp>(opInst)) {
     OpBuilder b(opInst);
-    SmallVector<Value *, 4> mapOperands(load.getMapOperands());
+    SmallVector<Value *, 4> mapOperands(load.getIndices());
     SmallVector<Value *, 8> indices;
     indices.reserve(load.getMemRefType().getRank());
     if (load.getAffineMap() !=
         b.getMultiDimIdentityMap(load.getMemRefType().getRank())) {
       computeMemoryOpIndices(opInst, load.getAffineMap(), mapOperands, indices);
     } else {
-      indices.append(load.getMapOperands().begin(),
-                     load.getMapOperands().end());
+      indices.append(load.getIndices().begin(), load.getIndices().end());
     }
     auto permutationMap =
         makePermutationMap(opInst, indices, state->strategy->loopToVectorDim);
@@ -830,7 +829,7 @@ static LogicalResult vectorizeRootOrTerminal(Value *iv,
       return LogicalResult::Failure;
     LLVM_DEBUG(dbgs() << "\n[early-vect]+++++ permutationMap: ");
     LLVM_DEBUG(permutationMap.print(dbgs()));
-    auto transfer = b.create<vector::VectorTransferReadOp>(
+    auto transfer = b.create<VectorTransferReadOp>(
         opInst->getLoc(), vectorType, memoryOp.getMemRef(),
         map(makePtrDynCaster<Value>(), indices), permutationMap);
     state->registerReplacement(opInst, transfer.getOperation());
@@ -1028,9 +1027,9 @@ static Operation *vectorizeOneOperation(Operation *opInst,
   // Sanity checks.
   assert(!isa<AffineLoadOp>(opInst) &&
          "all loads must have already been fully vectorized independently");
-  assert(!isa<vector::VectorTransferReadOp>(opInst) &&
+  assert(!isa<VectorTransferReadOp>(opInst) &&
          "vector.transfer_read cannot be further vectorized");
-  assert(!isa<vector::VectorTransferWriteOp>(opInst) &&
+  assert(!isa<VectorTransferWriteOp>(opInst) &&
          "vector.transfer_write cannot be further vectorized");
 
   if (auto store = dyn_cast<AffineStoreOp>(opInst)) {
@@ -1039,7 +1038,7 @@ static Operation *vectorizeOneOperation(Operation *opInst,
     auto *value = store.getValueToStore();
     auto *vectorValue = vectorizeOperand(value, opInst, state);
 
-    SmallVector<Value *, 4> mapOperands(store.getMapOperands());
+    SmallVector<Value *, 4> mapOperands(store.getIndices());
     SmallVector<Value *, 8> indices;
     indices.reserve(store.getMemRefType().getRank());
     if (store.getAffineMap() !=
@@ -1047,8 +1046,7 @@ static Operation *vectorizeOneOperation(Operation *opInst,
       computeMemoryOpIndices(opInst, store.getAffineMap(), mapOperands,
                              indices);
     } else {
-      indices.append(store.getMapOperands().begin(),
-                     store.getMapOperands().end());
+      indices.append(store.getIndices().begin(), store.getIndices().end());
     }
 
     auto permutationMap =
@@ -1057,7 +1055,7 @@ static Operation *vectorizeOneOperation(Operation *opInst,
       return nullptr;
     LLVM_DEBUG(dbgs() << "\n[early-vect]+++++ permutationMap: ");
     LLVM_DEBUG(permutationMap.print(dbgs()));
-    auto transfer = b.create<vector::VectorTransferWriteOp>(
+    auto transfer = b.create<VectorTransferWriteOp>(
         opInst->getLoc(), vectorValue, memRef, indices, permutationMap);
     auto *res = transfer.getOperation();
     LLVM_DEBUG(dbgs() << "\n[early-vect]+++++ vectorized store: " << *res);
@@ -1242,7 +1240,7 @@ void Vectorize::runOnFunction() {
   NestedPatternContext mlContext;
 
   llvm::DenseSet<Operation *> parallelLoops;
-  f.walk([&parallelLoops](AffineForOp loop) {
+  f.walk<AffineForOp>([&parallelLoops](AffineForOp loop) {
     if (isLoopParallel(loop))
       parallelLoops.insert(loop);
   });
@@ -1278,9 +1276,9 @@ void Vectorize::runOnFunction() {
   LLVM_DEBUG(dbgs() << "\n");
 }
 
-std::unique_ptr<OpPassBase<FuncOp>>
+FunctionPassBase *
 mlir::createVectorizePass(llvm::ArrayRef<int64_t> virtualVectorSize) {
-  return std::make_unique<Vectorize>(virtualVectorSize);
+  return new Vectorize(virtualVectorSize);
 }
 
 static PassRegistration<Vectorize>

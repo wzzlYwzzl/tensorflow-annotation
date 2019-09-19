@@ -16,7 +16,6 @@ limitations under the License.
 #include "tensorflow/compiler/xla/layout_util.h"
 
 #include <stddef.h>
-
 #include <algorithm>
 #include <functional>
 #include <random>
@@ -42,8 +41,7 @@ namespace {
 
 // Internal helper for GetDefaultLayoutForShape and SetToDefaultLayout. Sets
 // minor_to_major to the value that represents the default layout.
-template <typename T>
-void SetDefaultLayoutToContainer(T* minor_to_major) {
+void SetDefaultLayoutToContainer(std::vector<int64>* minor_to_major) {
   // The default XLA layout is major-to-minor (dim 0 is major).
   // For more information on XLA layouts, see:
   // https://www.tensorflow.org/performance/xla/shapes
@@ -107,7 +105,7 @@ namespace {
 Layout CreateDefaultLayoutForRank(int64 rank) {
   Layout layout;
   layout.set_format(DENSE);
-  auto* minor_to_major = layout.mutable_minor_to_major();
+  std::vector<int64>* minor_to_major = layout.mutable_minor_to_major();
   minor_to_major->resize(rank, 0);
   SetDefaultLayoutToContainer(minor_to_major);
   return layout;

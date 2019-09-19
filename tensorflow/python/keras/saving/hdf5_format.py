@@ -699,8 +699,7 @@ def load_weights_from_hdf5_group(f, layers):
   K.batch_set_value(weight_value_tuples)
 
 
-def load_weights_from_hdf5_group_by_name(
-    f, layers, skip_mismatch=False):
+def load_weights_from_hdf5_group_by_name(f, layers):
   """Implements name-based weight loading.
 
   (instead of topological weight loading).
@@ -710,13 +709,10 @@ def load_weights_from_hdf5_group_by_name(
   Arguments:
       f: A pointer to a HDF5 group.
       layers: a list of target layers.
-      skip_mismatch: Boolean, whether to skip loading of layers
-          where there is a mismatch in the number of weights,
-          or a mismatch in the shape of the weights.
 
   Raises:
       ValueError: in case of mismatch between provided layers
-          and weights file and skip_match=False.
+          and weights file.
   """
   if 'keras_version' in f.attrs:
     original_keras_version = f.attrs['keras_version'].decode('utf8')
@@ -749,12 +745,6 @@ def load_weights_from_hdf5_group_by_name(
       weight_values = preprocess_weights_for_loading(
           layer, weight_values, original_keras_version, original_backend)
       if len(weight_values) != len(symbolic_weights):
-        if skip_mismatch:
-          logging.warning('Skipping loading of weights for '
-                          'layer {}'.format(layer.name) + ' due to mismatch '
-                          'in number of weights ({} vs {}).'.format(
-                              len(symbolic_weights), len(weight_values)))
-          continue
         raise ValueError('Layer #' + str(k) + ' (named "' + layer.name +
                          '") expects ' + str(len(symbolic_weights)) +
                          ' weight(s), but the saved weights' + ' have ' +
@@ -762,13 +752,6 @@ def load_weights_from_hdf5_group_by_name(
       # Set values.
       for i in range(len(weight_values)):
         if K.int_shape(symbolic_weights[i]) != weight_values[i].shape:
-          if skip_mismatch:
-            logging.warning('Skipping loading of weights for '
-                            'layer {}'.format(layer.name) + ' due to '
-                            'mismatch in shape ({} vs {}).'.format(
-                                symbolic_weights[i].shape,
-                                weight_values[i].shape))
-            continue
           raise ValueError('Layer #' + str(k) +' (named "' + layer.name +
                            '"), weight ' + str(symbolic_weights[i]) +
                            ' has shape {}'.format(K.int_shape(

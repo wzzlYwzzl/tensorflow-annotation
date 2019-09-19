@@ -80,11 +80,6 @@ from tensorflow.python.util import compat
 from tensorflow.python.util import nest
 from tensorflow.python.util import tf_inspect
 
-try:
-  import attr  # pylint:disable=g-import-not-at-top
-except ImportError:
-  attr = None
-
 
 def total_function_cache(defined):
   # pylint: disable=protected-access
@@ -361,34 +356,6 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
     expected = pair(math_ops.matmul(a, b).numpy(),
                     math_ops.matmul(b, a).numpy())
     self.assertAllClose(out, expected)
-
-  @parameterized.named_parameters(
-      dict(testcase_name='Defun',
-           function_decorator=function.defun),
-      dict(testcase_name='DefFunction',
-           function_decorator=def_function.function))
-  def testNestedFunctionGraphNotOutOfDate(self, function_decorator):
-    @function_decorator
-    def f():
-      return constant_op.constant(1.)
-
-    class _Model(object):
-
-      @function_decorator
-      def g(self):
-        self.f = f.get_concrete_function()
-
-    model = _Model()
-    model.g()
-    concrete = model.f
-    weak_g_graph = weakref.ref(model.g.get_concrete_function().graph)
-    self.assertIs(weak_g_graph(), concrete.graph.outer_graph)
-    weak_g = weakref.ref(model.g)
-    del model
-    self.assertIsNone(weak_g())
-    self.assertIsNone(weak_g_graph())
-    self.assertIsNotNone(concrete.graph.outer_graph)
-    self.assertIs(ops.get_default_graph(), concrete.graph.outer_graph)
 
   def testGraphEagerIsolation(self):
 
@@ -885,6 +852,16 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
       f(constant_op.constant(1.0))
     run_metadata = context.export_run_metadata()
     context.disable_run_metadata()
+    step_stats = run_metadata.step_stats
+    self.assertNotEmpty(step_stats.dev_stats)
+    cpu_stats = step_stats.dev_stats[0]
+    self.assertEqual('/job:localhost/replica:0/task:0/device:CPU:0',
+                     cpu_stats.device)
+    # Testing for at least 2 because the function call should generate at most
+    # one entry in the step_stats; the ops inside function can generate
+    # arbitrarily many (placeholders, return identities, etc, might be included
+    # or not in the future, so shouldn't be tested for exactly.
+    self.assertGreaterEqual(len(cpu_stats.node_stats), 2)
     self.assertLen(run_metadata.partition_graphs, 1)
 
   def testGraphModeCaptureVariable(self):
@@ -2402,37 +2379,6 @@ class FunctionTest(test.TestCase, parameterized.TestCase):
     self.assertLen(total_function_cache(defined), 1)
 
     defined([[a, b], c])
-    self.assertLen(total_function_cache(defined), 2)
-
-  def testCacheKeyAttrsClass(self):
-    if attr is None:
-      self.skipTest('attr module is unavailable.')
-
-    @attr.s
-    class TestClass(object):
-      a = attr.ib()
-      b = attr.ib()
-
-    @function.defun
-    def defined(l):
-      return l
-
-    defined(
-        TestClass(
-            constant_op.constant(1.),
-            [constant_op.constant(2.),
-             constant_op.constant(3.)]))
-    self.assertLen(total_function_cache(defined), 1)
-    defined(
-        TestClass(
-            constant_op.constant(1.),
-            [constant_op.constant(2.),
-             constant_op.constant(3.)]))
-    self.assertLen(total_function_cache(defined), 1)
-
-    defined(
-        TestClass([constant_op.constant(1.),
-                   constant_op.constant(2.)], constant_op.constant(3.)))
     self.assertLen(total_function_cache(defined), 2)
 
   def testDecoratedMethod(self):

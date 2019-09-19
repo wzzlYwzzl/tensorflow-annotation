@@ -47,7 +47,7 @@ DOCLINES = __doc__.split('\n')
 # result for pip.
 # Also update tensorflow/tensorflow.bzl and
 # tensorflow/core/public/version.h
-_VERSION = '1.14.0'
+_VERSION = '2.0.0-rc2'
 
 REQUIRED_PACKAGES = [
     'absl-py >= 0.7.0',
@@ -62,8 +62,8 @@ REQUIRED_PACKAGES = [
     'opt_einsum >= 2.3.2',
     'six >= 1.10.0',
     'protobuf >= 3.6.1',
-    'tensorboard >= 1.15.0, < 1.16.0',
-    'tensorflow_estimator >= 1.14.0rc0, < 1.15.0rc0',
+    'tb-nightly >= 1.15.0a20190806, < 1.15.0a20190807',
+    'tf-estimator-nightly >= 1.14.0.dev2019080601, < 1.14.0.dev2019080602',
     'termcolor >= 1.1.0',
     'wrapt >= 1.11.1',
 ]
@@ -95,7 +95,7 @@ else:
 if 'tf_nightly' in project_name:
   for i, pkg in enumerate(REQUIRED_PACKAGES):
     if 'tensorboard' in pkg:
-      REQUIRED_PACKAGES[i] = 'tb-nightly >= 2.0.0a0, < 2.1.0a0'
+      REQUIRED_PACKAGES[i] = 'tb-nightly >= 1.15.0a0, < 1.16.0a0'
     elif 'tensorflow_estimator' in pkg and '2.0' in project_name:
       REQUIRED_PACKAGES[i] = 'tensorflow-estimator-2.0-preview'
     elif 'tensorflow_estimator' in pkg:
@@ -113,7 +113,6 @@ CONSOLE_SCRIPTS = [
     # even though the command is not removed, just moved to a different wheel.
     'tensorboard = tensorboard.main:run_main',
     'tf_upgrade_v2 = tensorflow.tools.compatibility.tf_upgrade_v2_main:main',
-    'estimator_ckpt_converter = tensorflow_estimator.python.estimator.tools.checkpoint_converter:main',
 ]
 # pylint: enable=line-too-long
 

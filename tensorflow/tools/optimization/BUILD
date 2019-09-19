@@ -19,6 +19,7 @@ tf_cuda_library(
     srcs = ["optimization_pass_runner.cc"],
     hdrs = ["optimization_pass_runner.h"],
     deps = [
+        "//tensorflow/contrib:contrib_ops_op_lib",
         "//tensorflow/core:core_cpu",
         "//tensorflow/core:core_cpu_base",
         "//tensorflow/core:framework",
@@ -38,6 +39,7 @@ tf_cc_binary(
         "//tensorflow/compiler/jit:xla_cpu_jit",
         "//tensorflow/compiler/jit:xla_gpu_jit",
         "//tensorflow/compiler/tf2xla:xla_compiler",
+        "//tensorflow/contrib:contrib_ops_op_lib",
         "//tensorflow/core:core_cpu",
         "//tensorflow/core:core_cpu_base",
         "//tensorflow/core:framework",

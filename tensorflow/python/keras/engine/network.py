@@ -27,7 +27,6 @@ import os
 import threading
 
 import numpy as np
-import six
 from six.moves import zip  # pylint: disable=redefined-builtin
 
 from tensorflow.python import pywrap_tensorflow
@@ -325,7 +324,6 @@ class Network(base_layer.Layer):
     self._layer_call_argspecs = {}
     for layer in self._layers:
       self._layer_call_argspecs[layer] = tf_inspect.getfullargspec(layer.call)
-      layer._attribute_sentinel.add_parent(self._attribute_sentinel)
 
     self._track_layers(layers)
 
@@ -344,7 +342,7 @@ class Network(base_layer.Layer):
     self._feed_input_names = []
     self._feed_inputs = []
     self._feed_input_shapes = []
-    for layer in self._input_layers:
+    for i, layer in enumerate(self._input_layers):
       self.input_names.append(layer.name)
       if layer.is_placeholder:
         self._feed_input_names.append(layer.name)
@@ -387,7 +385,6 @@ class Network(base_layer.Layer):
     self.built = False
 
   @property
-  @trackable_layer_utils.cache_recursive_attribute('dynamic')
   def dynamic(self):
     if self._is_graph_network:
       return any(layer.dynamic for layer in self.layers)
@@ -428,11 +425,9 @@ class Network(base_layer.Layer):
       try:
         self._is_graph_network
       except AttributeError:
-        # six.raise_from supresses the original AttributeError from being raised
-        six.raise_from(
-            RuntimeError('It looks like you are subclassing `Model` and you '
-                         'forgot to call `super(YourClass, self).__init__()`.'
-                         ' Always start with this line.'), None)
+        raise RuntimeError('It looks like you are subclassing `Model` and you '
+                           'forgot to call `super(YourClass, self).__init__()`.'
+                           ' Always start with this line.')
 
     super(Network, self).__setattr__(name, value)
 
@@ -444,9 +439,9 @@ class Network(base_layer.Layer):
       self._metrics.append(value)
 
   @property
-  @trackable_layer_utils.cache_recursive_attribute('stateful')
   def stateful(self):
-    return any(getattr(layer, 'stateful', False) for layer in self.layers)
+    return any((hasattr(layer, 'stateful') and layer.stateful)
+               for layer in self.layers)
 
   def reset_states(self):
     for layer in self.layers:
@@ -507,8 +502,8 @@ class Network(base_layer.Layer):
 
   @property
   def layers(self):
-    return list(
-        trackable_layer_utils.filter_empty_layer_containers(self._layers))
+    return trackable_layer_utils.filter_empty_layer_containers(
+        self._layers)
 
   def get_layer(self, name=None, index=None):
     """Retrieves a layer based on either its name (unique) or index.
@@ -649,7 +644,7 @@ class Network(base_layer.Layer):
           x = base_layer_utils.generate_placeholders_from_shape(input_shape)
 
         kwargs = {}
-        call_signature = self._call_full_argspec
+        call_signature = tf_inspect.getfullargspec(self.call)
         call_args = call_signature.args
         # Exclude `self`, `inputs`, and any argument with a default value.
         if len(call_args) > 2:
@@ -851,10 +846,6 @@ class Network(base_layer.Layer):
           argspec = self._layer_call_argspecs[layer].args
           if 'training' in argspec:
             kwargs.setdefault('training', training)
-            if (type(kwargs['training']) is ops.Tensor and  # pylint: disable=unidiomatic-typecheck
-                any([kwargs['training'] is x
-                     for x in backend._GRAPH_LEARNING_PHASES.values()])):
-              kwargs['training'] = training  # Materialize placeholder.
 
           # Map Keras tensors in kwargs to their computed value.
           def _map_tensor_if_from_keras_layer(t):
@@ -1104,7 +1095,7 @@ class Network(base_layer.Layer):
           save_relative_paths=True,
           all_model_checkpoint_paths=[filepath])
 
-  def load_weights(self, filepath, by_name=False, skip_mismatch=False):
+  def load_weights(self, filepath, by_name=False):
     """Loads all layer weights, either from a TensorFlow or an HDF5 weight file.
 
     If `by_name` is False weights are loaded based on the network's
@@ -1131,9 +1122,6 @@ class Network(base_layer.Layer):
         by_name: Boolean, whether to load weights by name or by topological
             order. Only topological loading is supported for weight files in
             TensorFlow format.
-        skip_mismatch: Boolean, whether to skip loading of layers where there is
-            a mismatch in the number of weights, or a mismatch in the shape of
-            the weight (only valid when `by_name=True`).
 
     Returns:
         When loading a weight file in TensorFlow format, returns the same status
@@ -1147,15 +1135,7 @@ class Network(base_layer.Layer):
     Raises:
         ImportError: If h5py is not available and the weight file is in HDF5
             format.
-        ValueError: If `skip_mismatch` is set to `True` when `by_name` is
-          `False`.
     """
-
-    if skip_mismatch and not by_name:
-      raise ValueError(
-          'When calling model.load_weights, skip_mismatch can only be set to '
-          'True when by_name is True.')
-
     if _is_hdf5_filepath(filepath):
       save_format = 'h5'
     else:
@@ -1192,8 +1172,7 @@ class Network(base_layer.Layer):
       if 'layer_names' not in f.attrs and 'model_weights' in f:
         f = f['model_weights']
       if by_name:
-        saving.load_weights_from_hdf5_group_by_name(
-            f, self.layers, skip_mismatch=skip_mismatch)
+        saving.load_weights_from_hdf5_group_by_name(f, self.layers)
       else:
         saving.load_weights_from_hdf5_group(f, self.layers)
 
@@ -1415,10 +1394,6 @@ class Network(base_layer.Layer):
       if layer not in layer_set:
         self._layers.append(layer)
         self._layer_call_argspecs[layer] = tf_inspect.getfullargspec(layer.call)
-
-        # This allows the added layer to broadcast mutations to the current
-        # layer, which is necessary to ensure cache correctness.
-        layer._attribute_sentinel.add_parent(self._attribute_sentinel)
         layer_set.add(layer)
 
   def _assert_weights_created(self):
@@ -1704,7 +1679,6 @@ def _serialize_tensors(kwargs):
 
   return nest.map_structure(_serialize_keras_tensor, kwargs)
 
-
 def _map_tensors_to_constants(kwargs):
 
   def _map_to_constants(t):
@@ -1828,6 +1802,7 @@ def reconstruct_from_config(config, custom_objects=None, created_layers=None):
       output_index = nest.flatten(output_tensors)[0]._keras_history.node_index
       node_index_map[(layer.name, node_count_by_layer[layer])] = output_index
       node_count_by_layer[layer] += 1
+
 
   def process_layer(layer_data):
     """Deserializes a layer, then call it on appropriate inputs.
@@ -2003,4 +1978,3 @@ def get_network_config(network, serialize_layer_fn=None):
   model_outputs = tf_utils.convert_inner_node_data(model_outputs)
   config['output_layers'] = model_outputs
   return config
-

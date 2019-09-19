@@ -30,8 +30,8 @@ from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.keras import backend as K
-from tensorflow.python.keras.engine import base_layer
 from tensorflow.python.keras.engine import base_layer_utils
+from tensorflow.python.keras.engine.base_layer import Layer
 from tensorflow.python.keras.losses import binary_crossentropy
 from tensorflow.python.keras.losses import categorical_crossentropy
 from tensorflow.python.keras.losses import categorical_hinge
@@ -64,7 +64,7 @@ from tensorflow.tools.docs import doc_controls
 
 @keras_export('keras.metrics.Metric')
 @six.add_metaclass(abc.ABCMeta)
-class Metric(base_layer.Layer):
+class Metric(Layer):
   """Encapsulates metric logic and state.
 
   Usage:
@@ -2813,8 +2813,6 @@ def cosine_proximity(y_true, y_pred, axis=-1):
 
 # Aliases
 
-acc = ACC = accuracy
-bce = BCE = binary_crossentropy
 mse = MSE = mean_squared_error
 mae = MAE = mean_absolute_error
 mape = MAPE = mean_absolute_percentage_error

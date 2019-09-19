@@ -165,14 +165,10 @@ class _ModuleInitCodeBuilder(object):
     # We store all possible ways of importing this symbol and later pick just
     # one.
     priority = 0
-    if symbol:
+    if symbol and hasattr(symbol, '__module__'):
       # Give higher priority to source module if it matches
       # symbol's original module.
-      if hasattr(symbol, '__module__'):
-        priority = int(source_module_name == symbol.__module__)
-      # Give higher priority if symbol name matches its __name__.
-      if hasattr(symbol, '__name__'):
-        priority += int(source_name == symbol.__name__)
+      priority = int(source_module_name == symbol.__module__)
     self._module_imports[dest_module_name][full_api_name].add(
         (import_str, priority))
 

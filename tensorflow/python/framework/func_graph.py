@@ -198,14 +198,7 @@ class FuncGraph(ops.Graph):
     self.structured_outputs = None
     self._weak_variables = []
     self._watched_variables = object_identity.ObjectIdentityWeakSet()
-
-    outer_graph = ops.get_default_graph()
-    self._weak_outer_graph = weakref.ref(outer_graph)
-    while outer_graph.building_function:
-      outer_graph = outer_graph.outer_graph
-    # If self._weak_outer_graph is deleted, we revert to the outermost Graph
-    # active when the FuncGraph was traced. This will not be a FuncGraph.
-    self._fallback_outer_graph = outer_graph
+    self.outer_graph = ops.get_default_graph()
     self._captures = py_collections.OrderedDict()
     # If not None, records the names of output args of this function. Used to
     # preserve the output names in the signature of a serialized+deserialized
@@ -418,27 +411,6 @@ class FuncGraph(ops.Graph):
     return inner_cm()
 
   @property
-  def outer_graph(self):
-    """The Graph this FuncGraph is nested in.
-
-    Functions may capture Tensors from graphs they are nested in (transitive).
-
-    Returns:
-      A Graph object. Initially set to the current default graph when the
-      FuncGraph was created. If the previous `outer_graph` was deleted because
-      the function that owns it was deleted, `outer_graph` is reset to the
-      outermost default graph active when the FuncGraph was created. This
-      FuncGraph won't have captured anything from the new `outer_graph` (and
-      likely not from the previous setting, since that would have created a
-      strong reference), but it is returned so that FuncGraphs always have a
-      parent.
-    """
-    current = self._weak_outer_graph()
-    if current is None:
-      return self._fallback_outer_graph
-    return current
-
-  @property
   def output_types(self):
     return [t.dtype for t in self.outputs]
 
@@ -504,7 +476,7 @@ class FuncGraph(ops.Graph):
     captured_value = self.capture(value)
     return captured_value.op
 
-  def _create_op_internal(
+  def create_op(
       self,
       op_type,
       inputs,
@@ -513,6 +485,7 @@ class FuncGraph(ops.Graph):
       name=None,
       attrs=None,
       op_def=None,
+      compute_shapes=True,
       compute_device=True):
     """Like Graph.create_op, except handles external input tensors.
 
@@ -538,12 +511,15 @@ class FuncGraph(ops.Graph):
         proto).
       op_def: (Optional.) The `OpDef` proto that describes the `op_type` that
         the operation will have.
+      compute_shapes: (Optional.) Deprecated. Has no effect (shapes are always
+        computed).
       compute_device: (Optional.) If True, device functions will be executed
         to compute the device property of the Operation.
 
     Returns:
       An `Operation` object.
     """
+    del compute_shapes
     if self.capture_by_value and op_type in ["ReadVariableOp",
                                              "ResourceGather"]:
       return self._capture_by_value(op_type, inputs, dtypes, input_types, name,
@@ -638,8 +614,7 @@ class FuncGraph(ops.Graph):
     else:
       placeholder = capture[1]
     tape.record_operation("captured_value", [placeholder], [tensor],
-                          backward_function=lambda x: [x],
-                          forward_function=lambda x: [x])
+                          lambda x: [x])
     return placeholder
 
   @property
@@ -685,8 +660,7 @@ class FuncGraph(ops.Graph):
     """Add given distributed variable to captures with given placeholder."""
     self._captures[ops.tensor_id(variable)] = (variable, placeholder)
     tape.record_operation("captured_value", [placeholder], [variable],
-                          backward_function=lambda x: [x],
-                          forward_function=lambda x: [x])
+                          lambda x: [x])
 
   def capture_eager_tensor(self, tensor, name):
     capture = self._captures.get(ops.tensor_id(tensor))
@@ -701,8 +675,7 @@ class FuncGraph(ops.Graph):
     else:
       graph_const = capture[1]
     tape.record_operation("captured_value", [graph_const], [tensor],
-                          backward_function=lambda x: [x],
-                          forward_function=lambda x: [x])
+                          lambda x: [x])
     return graph_const
 
   @property

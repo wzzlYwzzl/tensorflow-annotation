@@ -661,7 +661,6 @@ int64 OpLevelCostEstimator::CountConv2DOperations(
 }
 
 // Helper to translate the positional arguments into named fields.
-/* static */
 OpLevelCostEstimator::ConvolutionDimensions
 OpLevelCostEstimator::ConvolutionDimensionsFromInputs(
     const TensorShapeProto& original_image_shape,
@@ -2023,6 +2022,7 @@ Costs OpLevelCostEstimator::PredictFusedBatchNormGrad(
   return costs;
 }
 
+/* static */
 void OpLevelCostEstimator::CombineCostsAndUpdateExecutionTime(
     Costs* costs) const {
   if (compute_memory_overlap_) {

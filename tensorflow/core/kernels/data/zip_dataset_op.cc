@@ -87,13 +87,6 @@ class ZipDatasetOp::Dataset : public DatasetBase {
     return result;
   }
 
-  Status CheckExternalState() const override {
-    for (const auto& input : inputs_) {
-      TF_RETURN_IF_ERROR(input->CheckExternalState());
-    }
-    return Status::OK();
-  }
-
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
                             DatasetGraphDefBuilder* b,
@@ -108,6 +101,15 @@ class ZipDatasetOp::Dataset : public DatasetBase {
     TF_RETURN_IF_ERROR(b->AddDataset(
         this, {}, {std::make_pair(0, input_graph_nodes)}, {}, output));
     return Status::OK();
+  }
+
+  bool IsStateful() const override {
+    for (const auto& input : inputs_) {
+      if (input->IsStateful()) {
+        return true;
+      }
+    }
+    return false;
   }
 
  private:

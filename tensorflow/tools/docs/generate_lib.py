@@ -41,7 +41,7 @@ def write_docs(output_dir,
                yaml_toc,
                root_title='TensorFlow',
                search_hints=True,
-               site_api_path='api_docs/python'):
+               site_api_path=''):
   """Write previously extracted docs to disk.
 
   Write a docs page for each symbol included in the indices of parser_config to
@@ -95,7 +95,8 @@ def write_docs(output_dir,
             parser.is_free_function(py_object, full_name, parser_config.index)):
       continue
 
-    sitepath = os.path.join(parser.documentation_path(full_name)[:-3])
+    sitepath = os.path.join('api_docs/python',
+                            parser.documentation_path(full_name)[:-3])
 
     # For TOC, we need to store a mapping from full_name to the file
     # we're generating
@@ -533,7 +534,7 @@ class DocGenerator(object):
 
     self.argument_parser.add_argument(
         '--site_api_path',
-        type=str, default='api_docs/python',
+        type=str, default='',
         help='The path from the site-root to api_docs'
              'directory for this project')
 

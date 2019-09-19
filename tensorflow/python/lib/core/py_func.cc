@@ -61,9 +61,6 @@ struct PyCall {
   // True if the call is associated with an EagerPyFunc.
   bool eager = false;
 
-  // True if the call is running under eager async mode.
-  bool eager_async = false;
-
   // Inputs and outputs of this function invocation.
   std::vector<Tensor> ins;
   std::vector<Tensor> out;
@@ -176,18 +173,12 @@ Status DoCallPyFunc(PyCall* call, bool* out_log_on_error) {
 
   // Prepare the argument.
   PyObject* args = nullptr;
-  TFE_Context* ctx = nullptr;
-  std::unique_ptr<EagerExecutor> new_executor = nullptr;
-  EagerExecutor* old_executor = nullptr;
   if (call->eager) {
     // See FuncRegistry._ctx.
-    ctx = reinterpret_cast<TFE_Context*>(PyCapsule_GetPointer(
+    TFE_Context* ctx = reinterpret_cast<TFE_Context*>(PyCapsule_GetPointer(
         PyObject_GetAttrString(trampoline, "_ctx"), nullptr));
     CHECK_NE(ctx, nullptr);
     TF_RETURN_IF_ERROR(MakeArgTuple(call, ctx->context, &args));
-    new_executor.reset(new EagerExecutor(call->eager_async));
-    old_executor = &ctx->context->Executor();
-    ctx->context->SetExecutorForThread(new_executor.get());
   } else {
     TF_RETURN_IF_ERROR(MakeArgTuple(call, nullptr, &args));
   }
@@ -196,38 +187,31 @@ Status DoCallPyFunc(PyCall* call, bool* out_log_on_error) {
   // Invokes the trampoline.
   PyObject* result = PyEval_CallObject(trampoline, args);
   Py_DECREF(args);
-  Status s = Status::OK();
   if (result == nullptr) {
     if (PyErr_Occurred()) {
       if (PyErr_ExceptionMatches(PyExc_ValueError) ||
           PyErr_ExceptionMatches(PyExc_TypeError)) {
-        s = errors::InvalidArgument(PyExceptionFetch());
+        return errors::InvalidArgument(PyExceptionFetch());
       } else if (PyErr_ExceptionMatches(PyExc_StopIteration)) {
         *out_log_on_error = false;
-        s = errors::OutOfRange(PyExceptionFetch());
+        return errors::OutOfRange(PyExceptionFetch());
       } else if (PyErr_ExceptionMatches(PyExc_MemoryError)) {
-        s = errors::ResourceExhausted(PyExceptionFetch());
+        return errors::ResourceExhausted(PyExceptionFetch());
       } else if (PyErr_ExceptionMatches(PyExc_NotImplementedError)) {
-        s = errors::Unimplemented(PyExceptionFetch());
+        return errors::Unimplemented(PyExceptionFetch());
       } else {
         // TODO(ebrevdo): Check if exception is an OpError and use the
         // OpError.error_code property to map it back in the Status.
-        s = errors::Unknown(PyExceptionFetch());
+        return errors::Unknown(PyExceptionFetch());
       }
     } else {
-      s = errors::Internal("Failed to run py callback ", call->token,
-                           ": see error log.");
+      return errors::Internal("Failed to run py callback ", call->token,
+                              ": see error log.");
     }
   }
 
-  if (new_executor != nullptr) {
-    s.Update(new_executor->WaitForAllPendingNodes());
-    ctx->context->SetExecutorForThread(old_executor);
-  }
-
-  TF_RETURN_IF_ERROR(s);
-
   // Process the return values and convert them to TF Tensors.
+  Status s = Status::OK();
   if (PyList_Check(result)) {
     // `result` is a Python list; if this operation is an `EagerPyFunc`, then
     // every item in the list must be an `EagerTensor`; otherwise, every element
@@ -298,9 +282,6 @@ class PyFuncOp : public OpKernel {
   explicit PyFuncOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
     OP_REQUIRES_OK(ctx, ctx->GetAttr("token", &token_));
     eager_ = type_string() == "EagerPyFunc";
-    if (eager_) {
-      OP_REQUIRES_OK(ctx, ctx->GetAttr("is_async", &eager_async_));
-    }
   }
 
   bool IsExpensive() override { return true; }
@@ -318,7 +299,6 @@ class PyFuncOp : public OpKernel {
             "Unrecognized device class: ", ctx->device()->name()));
         return;
       }
-      call.eager_async = eager_async_;
     }
 
     for (int i = 0; i < ctx->num_inputs(); ++i) {
@@ -376,8 +356,6 @@ class PyFuncOp : public OpKernel {
   // True if and only if this op should execute the python function eagerly,
   // i.e., if and only if the eager attribute is set.
   bool eager_;
-
-  bool eager_async_;
 
   TF_DISALLOW_COPY_AND_ASSIGN(PyFuncOp);
 };

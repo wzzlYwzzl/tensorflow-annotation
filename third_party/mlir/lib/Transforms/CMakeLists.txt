@@ -5,7 +5,6 @@ add_llvm_library(MLIRTransforms
   Canonicalizer.cpp
   CSE.cpp
   DialectConversion.cpp
-  Inliner.cpp
   LoopCoalescing.cpp
   LoopFusion.cpp
   LoopInvariantCodeMotion.cpp
@@ -20,7 +19,6 @@ add_llvm_library(MLIRTransforms
   SimplifyAffineStructures.cpp
   StripDebugInfo.cpp
   Vectorize.cpp
-  ViewOpGraph.cpp
   ViewRegionGraph.cpp
 
   ADDITIONAL_HEADER_DIRS

@@ -74,18 +74,17 @@ class GeneratorDatasetOp::Dataset : public DatasetBase {
     return name_utils::DatasetDebugString(kDatasetType);
   }
 
-  Status CheckExternalState() const override {
-    TF_RETURN_IF_ERROR(init_func_->CheckExternalState());
-    TF_RETURN_IF_ERROR(next_func_->CheckExternalState());
-    return finalize_func_->CheckExternalState();
+  bool IsStateful() const override {
+    return init_func_->IsStateful() || next_func_->IsStateful() ||
+           finalize_func_->IsStateful();
   }
 
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
                             DatasetGraphDefBuilder* b,
                             Node** output) const override {
-    return errors::Unimplemented(DebugString(),
-                                 " does not support serialization");
+    return errors::Unimplemented("%s does not support serialization",
+                                 DebugString());
   }
 
  private:

@@ -85,7 +85,7 @@ Status BufferedInputStream::ReadLineHelper(string* result, bool include_eol) {
   return s;
 }
 
-Status BufferedInputStream::ReadNBytes(int64 bytes_to_read, tstring* result) {
+Status BufferedInputStream::ReadNBytes(int64 bytes_to_read, string* result) {
   if (bytes_to_read < 0) {
     return errors::InvalidArgument("Can't read a negative number of bytes: ",
                                    bytes_to_read);
@@ -167,8 +167,7 @@ Status BufferedInputStream::Seek(int64 position) {
   return SkipNBytes(position - bufpos);
 }
 
-template <typename T>
-Status BufferedInputStream::ReadAll(T* result) {
+Status BufferedInputStream::ReadAll(string* result) {
   result->clear();
   Status status;
   while (status.ok()) {
@@ -186,11 +185,6 @@ Status BufferedInputStream::ReadAll(T* result) {
   }
   return status;
 }
-
-template Status BufferedInputStream::ReadAll<string>(string* result);
-#ifdef USE_TSTRING
-template Status BufferedInputStream::ReadAll<tstring>(tstring* result);
-#endif  // USE_TSTRING
 
 Status BufferedInputStream::Reset() {
   TF_RETURN_IF_ERROR(input_stream_->Reset());

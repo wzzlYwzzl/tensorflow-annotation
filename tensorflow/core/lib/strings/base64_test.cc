@@ -21,11 +21,11 @@ namespace tensorflow {
 
 TEST(Base64, EncodeDecode) {
   const string original = "a simple test message!";
-  tstring encoded;
+  string encoded;
   TF_EXPECT_OK(Base64Encode(original, &encoded));
   EXPECT_EQ("YSBzaW1wbGUgdGVzdCBtZXNzYWdlIQ", encoded);
 
-  tstring decoded;
+  string decoded;
   TF_EXPECT_OK(Base64Decode(encoded, &decoded));
   EXPECT_EQ(original, decoded);
 }

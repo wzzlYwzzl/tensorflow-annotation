@@ -27,7 +27,6 @@ limitations under the License.
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/gtl/flatmap.h"
-#include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/types.h"
@@ -230,20 +229,17 @@ GlobalDeviceMap BuildDevRecs(const CollInstanceParams& ip,
 }
 
 bool ParseRingOrder(const string& gpu_ring_order_str, TaskDeviceMap* tdm) {
-  std::vector<string> split_gpu_ring_order_str =
-      str_util::Split(gpu_ring_order_str, ',');
-  if (split_gpu_ring_order_str.size() != tdm->size()) return false;
-
+  std::vector<int32> gpu_ring_order_vec;
+  if (!str_util::SplitAndParseAsInts(gpu_ring_order_str, ',',
+                                     &gpu_ring_order_vec)) {
+    return false;
+  }
+  if (gpu_ring_order_vec.size() != tdm->size()) return false;
   // gpu id -> local rank
   gtl::FlatMap<int32, int32> gpu_ranks;
-  for (int32 rank = 0;
-       rank < static_cast<int32>(split_gpu_ring_order_str.size()); ++rank) {
-    int32 tmp;
-    if (strings::safe_strto32(split_gpu_ring_order_str[rank], &tmp)) {
-      gpu_ranks[tmp] = rank;
-    } else {
-      return false;
-    }
+  for (int32 rank = 0; rank < static_cast<int32>(gpu_ring_order_vec.size());
+       ++rank) {
+    gpu_ranks[gpu_ring_order_vec[rank]] = rank;
   }
 
   for (auto& tdm_it : *tdm) {
@@ -674,18 +670,7 @@ void CollectiveParamResolverLocal::CompleteInstanceAsync(
 // implementation.  The ideal way would depend upon the topology and link
 // strength before picking a particular implementation.
 void CollectiveParamResolverLocal::AssignCollectiveType(CollectiveParams* cp) {
-  // We use the NCCL implementation if this is an environment which supports
-  // NCCL, i.e. `LookupParamResolverInstance` for `NcclReduce` returns OK, and
-  // also if indicated either in `ConfigProto` or `communication_hint`.
-  //
-  // After enough testing, we may simplify this logic to use NCCL whenever
-  // available.
-  CollectiveImplementationInterface* col_impl;
-  bool use_nccl =
-      (nccl_ || cp->instance.impl_details.communication_hint == "nccl") &&
-      CollectiveRegistry::LookupParamResolverInstance("NcclReduce", &col_impl)
-          .ok();
-  cp->instance.impl_details.collective_name = GetCollectiveName(cp, use_nccl);
+  cp->instance.impl_details.collective_name = GetCollectiveName(cp, nccl_);
   VLOG(1) << "AssignCollectiveType "
           << cp->instance.impl_details.collective_name;
 }
@@ -719,23 +704,12 @@ void CollectiveParamResolverLocal::CompleteInstanceLocal(
 void CollectiveParamResolverLocal::CompleteInstanceFromInitializedIRec(
     const string& device, const GroupRec* gr, CollectiveParams* cp,
     InstanceRec* ir, bool is_source, const StatusCallback& done) {
-  auto expected_shape = cp->instance.shape;
   // Populate the fields common across instance.
   {
     mutex_lock l(ir->out_mu);
     ir->WaitForOutMu(l);
     // custom operator= does a deep copy.
     cp->instance = ir->shared.instance;
-  }
-  if (expected_shape != cp->instance.shape) {
-    done(errors::InvalidArgument(
-        "Shape mismatch in the collective instance ", cp->instance.instance_key,
-        ". Op at device ", device, " expected shape ",
-        expected_shape.DebugString(), " but another member in the group ",
-        "expected shape ", cp->instance.shape.DebugString(), ". This is likely",
-        " due to different input shapes at different members of the collective",
-        " op."));
-    return;
   }
   // Populate the fields common across task.
   AssignCollectiveType(cp);

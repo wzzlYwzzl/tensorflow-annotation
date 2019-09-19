@@ -32,9 +32,8 @@ namespace tensorflow {
 namespace internal {
 
 template <typename T, bool conjugate>
-__global__ void TransposeKernel(int nthreads, const T* __restrict__ src,
-                                const int32* __restrict__ buf,
-                                const int32 ndims, T* __restrict__ dst) {
+__global__ void TransposeKernel(int nthreads, const T* src, const int32* buf,
+                                const int32 ndims, T* dst) {
   const int32* in_strides = buf;
   const int32* out_strides = buf + ndims;
   const int32* perm = buf + ndims * 2;
@@ -202,7 +201,7 @@ struct Transpose<GPUDevice, T, conjugate> {
 #undef HANDLE_DIM
 
 template <bool conjugate>
-struct Transpose<GPUDevice, tstring, conjugate> {
+struct Transpose<GPUDevice, string, conjugate> {
   static void run(const GPUDevice& d, const Tensor& in,
                   const gtl::ArraySlice<int32> perm, Tensor* out) {
     LOG(FATAL) << "Transpose of DT_STRING tensor not supported on GPU.";
@@ -210,7 +209,7 @@ struct Transpose<GPUDevice, tstring, conjugate> {
 };
 
 // Explicit instantiation.
-template struct Transpose<GPUDevice, tstring, false>;
+template struct Transpose<GPUDevice, string, false>;
 
 template <>
 Status DoTranspose(const GPUDevice& device, const Tensor& in,

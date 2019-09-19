@@ -44,7 +44,6 @@ limitations under the License.
 #include "tensorflow/core/lib/gtl/map_util.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/profiler/lib/traceme.h"
-#include "tensorflow/core/protobuf/config.pb.h"
 
 // See core/kernels/function_ops.cc for related kernels.
 
@@ -323,7 +322,6 @@ class FunctionLibraryRuntimeImpl : public FunctionLibraryRuntime {
                              thread::ThreadPool* default_thread_pool,
                              const OptimizerOptions& optimizer_options,
                              const CustomKernelCreator* custom_kernel_creator,
-                             const SessionMetadata* session_metadata,
                              ProcessFunctionLibraryRuntime* parent);
 
   ~FunctionLibraryRuntimeImpl() override;
@@ -380,7 +378,6 @@ class FunctionLibraryRuntimeImpl : public FunctionLibraryRuntime {
   const FunctionLibraryDefinition* const base_lib_def_;
   GraphOptimizer optimizer_;
   const CustomKernelCreator* custom_kernel_creator_;
-  const SessionMetadata* const session_metadata_;
   Executor::Args::Runner default_runner_;
   const string device_name_;
 
@@ -447,7 +444,6 @@ FunctionLibraryRuntimeImpl::FunctionLibraryRuntimeImpl(
     thread::ThreadPool* default_thread_pool,
     const OptimizerOptions& optimizer_options,
     const CustomKernelCreator* custom_kernel_creator,
-    const SessionMetadata* session_metadata,
     ProcessFunctionLibraryRuntime* parent)
     : device_mgr_(dmgr),
       device_(device),
@@ -456,7 +452,6 @@ FunctionLibraryRuntimeImpl::FunctionLibraryRuntimeImpl(
       base_lib_def_(lib_def),
       optimizer_(optimizer_options),
       custom_kernel_creator_(custom_kernel_creator),
-      session_metadata_(session_metadata),
       default_runner_(nullptr),
       device_name_(device_ == nullptr
                        ? ProcessFunctionLibraryRuntime::kDefaultFLRDevice
@@ -951,7 +946,6 @@ Status FunctionLibraryRuntimeImpl::CreateItem(Item** item) {
     DeleteNonCachedKernel(kernel);
   };
   params.rendezvous_factory = (*item)->rendezvous_factory;
-  params.session_metadata = session_metadata_;
   Graph* graph = g.get();
   std::unique_ptr<Executor> exec;
   TF_RETURN_IF_ERROR(NewExecutor(executor_type, params, std::move(g), &exec));
@@ -1103,7 +1097,7 @@ void FunctionLibraryRuntimeImpl::Run(const Options& opts, Handle handle,
                                      std::vector<Tensor>* rets,
                                      DoneCallback done) {
   if (opts.cancellation_manager && opts.cancellation_manager->IsCancelled()) {
-    done(errors::Cancelled("Function was cancelled before it was started"));
+    done(errors::Cancelled(""));
     return;
   }
   Options run_opts = opts;
@@ -1111,10 +1105,14 @@ void FunctionLibraryRuntimeImpl::Run(const Options& opts, Handle handle,
     Rendezvous* rendezvous = new IntraProcessRendezvous(device_mgr_);
     run_opts.rendezvous = rendezvous;
     run_opts.create_rendezvous = false;
-    done = [done = std::move(done), rendezvous](const Status& status) {
-      rendezvous->Unref();
-      done(status);
-    };
+    done = std::bind(
+        [rendezvous](DoneCallback done,
+                     // Begin unbound arguments.
+                     const Status& status) {
+          rendezvous->Unref();
+          done(status);
+        },
+        std::move(done), std::placeholders::_1);
   }
 
   LocalHandle local_handle = parent_->GetHandleOnDevice(device_name_, handle);
@@ -1182,10 +1180,14 @@ void FunctionLibraryRuntimeImpl::Run(const Options& opts, Handle handle,
     Rendezvous* rendezvous = new IntraProcessRendezvous(device_mgr_);
     run_opts.rendezvous = rendezvous;
     run_opts.create_rendezvous = false;
-    done = [done = std::move(done), rendezvous](const Status& status) {
-      rendezvous->Unref();
-      done(status);
-    };
+    done = std::bind(
+        [rendezvous](DoneCallback done,
+                     // Begin unbound arguments.
+                     const Status& status) {
+          rendezvous->Unref();
+          done(status);
+        },
+        std::move(done), std::placeholders::_1);
   }
 
   LocalHandle local_handle = parent_->GetHandleOnDevice(device_name_, handle);
@@ -1288,11 +1290,10 @@ std::unique_ptr<FunctionLibraryRuntime> NewFunctionLibraryRuntime(
     int graph_def_version, const FunctionLibraryDefinition* lib_def,
     thread::ThreadPool* thread_pool, const OptimizerOptions& optimizer_options,
     const CustomKernelCreator* custom_kernel_creator,
-    const SessionMetadata* session_metadata,
     ProcessFunctionLibraryRuntime* parent) {
   return std::unique_ptr<FunctionLibraryRuntime>(new FunctionLibraryRuntimeImpl(
       device_mgr, env, device, graph_def_version, lib_def, thread_pool,
-      optimizer_options, custom_kernel_creator, session_metadata, parent));
+      optimizer_options, custom_kernel_creator, parent));
 }
 
 bool RemoveDeadNodes(Graph* g) {
@@ -1653,7 +1654,7 @@ namespace {
 Status ValidateNoInline(const FunctionBody* fbody) {
   const auto attr = AttrSlice(&fbody->fdef.attr());
   bool noinline = false;
-  if (TryGetNodeAttr(attr, kNoInlineAttr, &noinline) && noinline) {
+  if (GetNodeAttrSimple(attr, kNoInlineAttr, &noinline) && noinline) {
     return errors::InvalidArgument(
         "Can't inline function marked with '_noinline'");
   }

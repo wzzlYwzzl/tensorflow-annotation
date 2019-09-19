@@ -56,9 +56,8 @@ from tensorflow.python.util.lazy_loader import LazyLoader
 # Lazily load the op, since it's not available in cpu-only builds. Importing
 # this at top will cause tests that imports TF-TRT fail when they're built
 # and run without CUDA/GPU.
-gen_trt_ops = LazyLoader(
-    "gen_trt_ops", globals(),
-    "tensorflow.compiler.tf2tensorrt.ops.gen_trt_ops")
+gen_trt_ops = LazyLoader("gen_trt_ops", globals(),
+                         "tensorflow.compiler.tf2tensorrt.ops.gen_trt_ops")
 
 # Register TRT ops in python, so that when users import this module they can
 # execute a TRT-converted graph without calling any of the methods in this
@@ -190,38 +189,31 @@ def _check_trt_version_compatibility():
   Raises:
     RuntimeError: if the TensorRT library version is incompatible.
   """
-  linked_version = wrap_py_utils.get_linked_tensorrt_version()
+  compiled_version = wrap_py_utils.get_linked_tensorrt_version()
   loaded_version = wrap_py_utils.get_loaded_tensorrt_version()
-  assert isinstance(linked_version, tuple)
-  assert isinstance(loaded_version, tuple)
-  assert len(linked_version) == 3
-  assert len(loaded_version) == 3
-  tf_logging.info("Linked TensorRT version: %s" % str(linked_version))
+  tf_logging.info("Linked TensorRT version: %s" % str(compiled_version))
   tf_logging.info("Loaded TensorRT version: %s" % str(loaded_version))
-  if loaded_version < linked_version:
+  version_mismatch = False
+  if loaded_version[0] < compiled_version[0]:
     tf_logging.error(
-        "Loaded TensorRT %s but linked TensorFlow against TensorRT %s. " %
-        (".".join([str(x) for x in loaded_version]),
-         ".".join([str(x) for x in linked_version])) +
-        "TensorRT does not support forward compatibility. " +
-        "It is also required to use the same major version of TensorRT " +
-        "during compilation and runtime.")
-    raise RuntimeError("Incompatible TensorRT versions")
-  if loaded_version[0] > linked_version[0]:
-    tf_logging.error(
-        "Loaded TensorRT %s but linked TensorFlow against TensorRT %s. " %
-        (".".join([str(x) for x in loaded_version]),
-         ".".join([str(x) for x in linked_version])) +
-        "It is required to use the same major version " +
-        "of TensorRT during compilation and runtime.")
-    raise RuntimeError("Incompatible TensorRT major version")
-  if loaded_version != linked_version:
-    tf_logging.info(
-        "Loaded TensorRT %s and linked TensorFlow against TensorRT %s. " %
-        (".".join([str(x) for x in loaded_version]),
-         ".".join([str(x) for x in linked_version])) +
-        "This is supported because TensorRT " +
-        " minor/patch upgrades are backward compatible")
+        "TensorRT version mismatch. Tensorflow was compiled against " +
+        "TensorRT %s but library loaded from environment is TensorRT %s" %
+        (".".join([str(x) for x in compiled_version]),
+         ".".join([str(x) for x in loaded_version])) +
+        ". Please make sure that correct version of TensorRT " +
+        "is available in the system and added to ldconfig or LD_LIBRARY_PATH")
+    raise RuntimeError("Incompatible TensorRT library version")
+  for i in zip(loaded_version, compiled_version):
+    if i[0] != i[1]:
+      tf_logging.warn("TensorRT mismatch. Compiled against version " +
+                      "%s, but loaded %s. Things may not work" %
+                      (".".join([str(x) for x in compiled_version]),
+                       ".".join([str(x) for x in loaded_version])))
+      version_mismatch = True
+      break
+  if not version_mismatch:
+    tf_logging.info("Running against TensorRT version %s" %
+                    ".".join([str(x) for x in loaded_version]))
 
 
 def get_tensorrt_rewriter_config(conversion_params, is_v2=False):
@@ -590,13 +582,6 @@ class TrtGraphConverter(object):
                                            not input_map_fn):
       raise ValueError(
           "Should specify one and only one of feed_dict_fn and input_map_fn.")
-
-    if input_map_fn:
-      for k, v in input_map_fn().items():
-        if not isinstance(k, str):
-          raise ValueError("Keys of input_map_fn must be of type str")
-        if not isinstance(v, ops.Tensor):
-          raise ValueError("Values of input_map_fn must be of type tf.Tensor")
 
     self._calibration_graph = ops.Graph()
     with self._calibration_graph.as_default():

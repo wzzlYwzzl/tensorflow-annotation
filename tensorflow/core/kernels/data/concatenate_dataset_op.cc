@@ -85,9 +85,8 @@ class ConcatenateDatasetOp::Dataset : public DatasetBase {
     return n1 + n2;
   }
 
-  Status CheckExternalState() const override {
-    TF_RETURN_IF_ERROR(input_->CheckExternalState());
-    return to_concatenate_->CheckExternalState();
+  bool IsStateful() const override {
+    return input_->IsStateful() || to_concatenate_->IsStateful();
   }
 
  protected:

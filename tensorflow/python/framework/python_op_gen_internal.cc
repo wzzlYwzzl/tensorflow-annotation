@@ -27,9 +27,11 @@ limitations under the License.
 #include "tensorflow/core/framework/api_def.pb.h"
 #include "tensorflow/core/framework/attr_value.pb.h"
 #include "tensorflow/core/framework/op.h"
+#include "tensorflow/core/framework/op_def.pb_text.h"
 #include "tensorflow/core/framework/op_def.pb.h"
 #include "tensorflow/core/framework/op_def_util.h"
 #include "tensorflow/core/framework/op_gen_lib.h"
+#include "tensorflow/core/framework/tensor.pb_text.h"
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/framework/types.h"
@@ -381,7 +383,7 @@ string ShapeToPython(const TensorShapeProto& shape) {
 }
 
 string TensorToPython(const TensorProto& proto) {
-  return proto.ShortDebugString();
+  return ProtoShortDebugString(proto);
 }
 
 string AttrListToPython(const AttrValue& value,
@@ -774,29 +776,36 @@ void GenPythonOp::AddDocStringNameArg() {
 }
 
 void GenPythonOp::AddOutputGlobals() {
-  // Generate a namedtuple class to hold the outputs, if there are multiple.
-  // Example:
-  //
-  // _OpOutputs = collections.namedtuple(
-  //     "_OpOutputs",
-  //     "out1 out2 out3")
+  // Prepare a NamedTuple type to hold the outputs, if there are multiple
   if (num_outs_ > 1) {
-    std::vector<string> out_names;
-    out_names.reserve(num_outs_);
+    // Prepare the list of output names
+    std::vector<string> out_names(num_outs_);
     for (int i = 0; i < num_outs_; ++i) {
-      const string out_name = !api_def_.out_arg(i).rename_to().empty()
-                                  ? api_def_.out_arg(i).rename_to()
-                                  : strings::StrCat("output", i);
-      out_names.push_back(strings::StrCat("\"", out_name, "\""));
+      if (!api_def_.out_arg(i).rename_to().empty()) {
+        out_names[i] = api_def_.out_arg(i).rename_to();
+      } else {
+        out_names[i] = strings::StrCat("output", i);
+      }
     }
+    string out_names_list =
+        strings::StrCat("[\"", absl::StrJoin(out_names, "\", \""), "\"]");
+
+    // Provide the output names as a Python list
+    string lower_op_name_outputs =
+        strings::StrCat("_", function_name_, "_outputs");
+    const string outputs_prefix = strings::StrCat(lower_op_name_outputs, " = ");
+    strings::StrAppend(&prelude_, "\n",
+                       WordWrap(outputs_prefix, out_names_list, kRightMargin),
+                       "\n");
 
     strings::StrAppend(&prelude_, "_", AvoidPythonReserved(op_def_.name()),
-                       "Output = collections.namedtuple(\n");
-    strings::StrAppend(&prelude_, "    \"", AvoidPythonReserved(op_def_.name()),
-                       "\",\n");
-    strings::StrAppend(&prelude_, "    [", absl::StrJoin(out_names, ", "),
-                       "])");
-    strings::StrAppend(&prelude_, "\n\n");
+                       "Output = _collections.namedtuple(\n");
+    const string tuple_type_prefix = "    ";
+    const string tuple_type_suffix = strings::StrCat(
+        "\"", AvoidPythonReserved(op_def_.name()), "\", ", lower_op_name_outputs, ")");
+    strings::StrAppend(
+        &prelude_, WordWrap(tuple_type_prefix, tuple_type_suffix, kRightMargin),
+        "\n\n");
   }
   strings::StrAppend(&prelude_, "\n");
 }

@@ -62,7 +62,8 @@ def TfeTokenType : Type<CPred<"$_self.isa<TokenType>()">, "token">;
 // TensorFlow Executor Type Constraint
 //===----------------------------------------------------------------------===//
 
-// Predicate to verify all control inputs appear after any non-control inputs.
+// Predicate to verify that the opId'th operand can be broadcasted to the type
+// of the  resId'th result.
 def ControlOperandsAfterAllData :
     PredOpTrait<"all control inputs must appear after any non-control input",
                 CPred<"succeeded(VerifyControlOperandsAfterAllData(&$_op))">>;
@@ -123,10 +124,7 @@ def TfExecutor_GraphOp : TfExecutor_Op<"graph",
 
   let extraClassDeclaration = [{
     Block &GetBody() { return getOperation()->getRegion(0).front(); }
-    FetchOp GetFetch();
   }];
-
-  let hasCanonicalizer = 1;
 }
 
 def TfExecutor_FetchOp : TfExecutor_Op<"fetch",
@@ -205,12 +203,7 @@ def TfExecutor_IslandOp : TfExecutor_Op<"island",
 
   let extraClassDeclaration = [{
     Block &GetBody() { return getOperation()->getRegion(0).front(); }
-    YieldOp GetYield();
   }];
-
-  let hasCanonicalizer = 1;
-
-  let hasFolder = 1;
 }
 
 def TfExecutor_YieldOp : TfExecutor_Op<"yield",
@@ -272,8 +265,8 @@ def TfExecutor_SwitchOp : TfExecutor_Op<"Switch",
   );
 
   let results = (outs
-    AnyType: $falseOutput,
     AnyType: $trueOutput,
+    AnyType: $falseOutput,
     TfeControlType: $control
   );
 
@@ -309,7 +302,7 @@ def TfExecutor_SwitchNOp : TfExecutor_Op<"SwitchN",
 
   let arguments = (ins
     AnyType:$data,
-    TensorOf<[I32]>:$index,
+    I32:$index,
     // Optional extra control inputs.
     Variadic<TfeControlType>:$controlInputs,
     I64Attr:$num_outs
@@ -351,7 +344,7 @@ def TfExecutor_MergeOp : TfExecutor_Op<"Merge",
 
   let results = (outs
     AnyTensor:$output,
-    TensorOf<[I32]>:$value_index,
+    TensorOf<[I32]>:$valueIndex,
     TfeControlType:$control
   );
 }
@@ -461,13 +454,6 @@ def TfExecutor_NextIterationSourceOp : TfExecutor_Op<"NextIteration.Source",
       result->attributes.append(attributes.begin(), attributes.end());
     }]>
    ];
-
-  let extraClassDeclaration = [{
-    NextIterationSinkOp GetSink() {
-      return cast<NextIterationSinkOp>(*token()->user_begin());
-    }
-  }];
-
 }
 
 
@@ -593,8 +579,6 @@ def TfExecutor_ControlTriggerOp : TfExecutor_Op<"ControlTrigger",
   );
 
   let verifier = ?;
-
-  let hasCanonicalizer = 1;
 
   let builders = [OpBuilder<
     "Builder *builder, OperationState *result, "

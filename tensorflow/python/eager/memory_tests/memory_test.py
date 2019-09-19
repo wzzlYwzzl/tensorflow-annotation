@@ -102,7 +102,3 @@ class MemoryTest(test.TestCase):
 
     memory_test_util.assert_no_leak(
         f, num_iters=1000, increase_threshold_absolute_mb=30)
-
-
-if __name__ == "__main__":
-  test.main()

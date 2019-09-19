@@ -133,7 +133,7 @@ def model_iteration(model,
     if steps_per_epoch is None:
       reset_dataset_after_each_epoch = True
       steps_per_epoch = training_utils.infer_steps_for_dataset(
-          model, data, steps_per_epoch, epochs=epochs, steps_name=steps_name)
+          data, steps_per_epoch, epochs=epochs, steps_name=steps_name)
 
   # Convert to a format that supports `next(generator)`.
   generator, steps_per_epoch = convert_to_generator_like(
@@ -318,7 +318,7 @@ def model_iteration(model,
           use_multiprocessing=use_multiprocessing,
           max_queue_size=max_queue_size,
           callbacks=callbacks,
-          verbose=verbose,
+          verbose=0,
           mode=ModeKeys.TEST,
           steps_name='validation_steps')
 
@@ -336,7 +336,6 @@ def model_iteration(model,
     if reset_dataset_after_each_epoch and epoch < epochs - 1:
       generator = dataset_ops.make_one_shot_iterator(original_dataset)
 
-  model._successful_loop_finish = True
   callbacks._call_end_hook(mode)
 
   if enqueuer is not None:

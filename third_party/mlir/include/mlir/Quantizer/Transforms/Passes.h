@@ -33,17 +33,17 @@ class TargetConfiguration;
 
 /// Creates a pass that infers quantized types based on metadata discovered
 /// in the computation.
-std::unique_ptr<OpPassBase<ModuleOp>>
+ModulePassBase *
 createInferQuantizedTypesPass(SolverContext &solverContext,
                               const TargetConfiguration &config);
 
 /// Creates a pass which removes any instrumentation and hint ops which have
 /// no effect on final runtime.
-std::unique_ptr<OpPassBase<FuncOp>> createRemoveInstrumentationPass();
+FunctionPassBase *createRemoveInstrumentationPass();
 
 /// Adds default (dummy) statistics to ops that can benefit from runtime stats.
 /// Meant for testing.
-std::unique_ptr<OpPassBase<FuncOp>> createAddDefaultStatsPass();
+FunctionPassBase *createAddDefaultStatsPass();
 
 } // namespace quantizer
 } // namespace mlir

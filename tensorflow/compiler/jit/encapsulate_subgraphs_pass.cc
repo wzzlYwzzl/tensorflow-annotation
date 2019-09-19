@@ -1193,7 +1193,7 @@ Status EncapsulateSubgraphsPass::Run(
   }
 
   std::unique_ptr<DeviceMgr> device_mgr =
-      absl::make_unique<StaticDeviceMgr>(std::move(devices));
+      absl::make_unique<DeviceMgr>(std::move(devices));
   OptimizerOptions opts;
   std::unique_ptr<ProcessFunctionLibraryRuntime> pflr(
       new ProcessFunctionLibraryRuntime(device_mgr.get(),
@@ -1317,7 +1317,7 @@ Status EncapsulateSubgraphsPass::Run(
 bool IsXlaCompiledKernel(const Node& node) {
   bool is_compiled = false;
   bool has_compilation_attr =
-      TryGetNodeAttr(node.attrs(), kXlaCompiledKernelAttr, &is_compiled) &&
+      GetNodeAttrSimple(node.attrs(), kXlaCompiledKernelAttr, &is_compiled) &&
       is_compiled;
   return has_compilation_attr ? is_compiled : false;
 }

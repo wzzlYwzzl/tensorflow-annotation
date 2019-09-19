@@ -22,7 +22,6 @@ limitations under the License.
 
 #define EIGEN_USE_THREADS
 #include <vector>
-
 #include "mkldnn.hpp"
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/bounds_check.h"
@@ -109,10 +108,8 @@ class MklLRNOp : public OpKernel {
         return;
       } else if (!src_dnn_shape.IsMklChannelDim(src_dnn_shape.GetDimension() -
                                                 1)) {
-        Tensor converted_tensor;
-        OP_REQUIRES_OK(context,
-                       ConvertMklToTF<T>(context, src_tensor, src_dnn_shape,
-                                         &converted_tensor));
+        Tensor converted_tensor =
+            ConvertMklToTF<T>(context, src_tensor, src_dnn_shape);
         MklDefaultToEigen(context, converted_tensor);
         return;
       }
@@ -534,26 +531,22 @@ class MklLRNGradOp : public OpKernel {
     GetMklShape(context, kIdxOrigOutput, &orig_output_dnn_shape);
 
     if (input_grad_dnn_shape.IsMklTensor()) {
-      OP_REQUIRES_OK(
-          context,
-          ConvertMklToTF<T>(context, MklGetInput(context, kIdxGradient),
-                            input_grad_dnn_shape, &input_gradient_tensor));
+      input_gradient_tensor = ConvertMklToTF<T>(
+          context, MklGetInput(context, kIdxGradient), input_grad_dnn_shape);
     } else {
       input_gradient_tensor = MklGetInput(context, kIdxGradient);
     }
 
     if (orig_input_dnn_shape.IsMklTensor()) {
-      OP_REQUIRES_OK(context, ConvertMklToTF<T>(
-                                  context, MklGetInput(context, kIdxOrigInput),
-                                  orig_input_dnn_shape, &orig_input_tensor));
+      orig_input_tensor = ConvertMklToTF<T>(
+          context, MklGetInput(context, kIdxOrigInput), orig_input_dnn_shape);
     } else {
       orig_input_tensor = MklGetInput(context, kIdxOrigInput);
     }
 
     if (orig_output_dnn_shape.IsMklTensor()) {
-      OP_REQUIRES_OK(context, ConvertMklToTF<T>(
-                                  context, MklGetInput(context, kIdxOrigOutput),
-                                  orig_output_dnn_shape, &orig_output_tensor));
+      orig_output_tensor = ConvertMklToTF<T>(
+          context, MklGetInput(context, kIdxOrigOutput), orig_output_dnn_shape);
     } else {
       orig_output_tensor = MklGetInput(context, kIdxOrigOutput);
     }

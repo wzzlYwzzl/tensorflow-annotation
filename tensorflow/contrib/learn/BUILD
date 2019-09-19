@@ -25,7 +25,6 @@ py_library(
     srcs_version = "PY2AND3",
     visibility = [
         "//learning/brain:__subpackages__",
-        "//storage/d/analysis/prefetch:__pkg__",
         "//tensorflow:__subpackages__",
         "//video/youtube/personalization:__subpackages__",
     ],
@@ -126,7 +125,7 @@ py_test(
 
 py_test(
     name = "estimators_test",
-    size = "medium",
+    size = "small",
     srcs = ["python/learn/estimators/estimators_test.py"],
     python_version = "PY2",
     srcs_version = "PY2AND3",

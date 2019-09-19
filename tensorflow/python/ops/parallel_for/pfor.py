@@ -20,9 +20,7 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
-import string
 
-from tensorflow.compiler.tf2xla.python import xla
 from tensorflow.python.eager import context
 from tensorflow.python.eager import def_function
 from tensorflow.python.eager import execute
@@ -980,9 +978,9 @@ class PForConfig(object):
     # This may be set to the number of iterations.
     self._maybe_iters = None
     # Map from output placeholder to the unvectorized tensor.
-    self._reduce_concat_map = {}
+    self._reduce_concat_map = object_identity.ObjectIdentityDictionary()
     # Reverse map of `self._reduce_concat_map`.
-    self._reverse_reduce_concat_map = {}
+    self._reverse_reduce_concat_map = object_identity.ObjectIdentityDictionary()
 
   def _has_reductions(self):
     """True if some reductions where performed by loop body."""
@@ -1007,17 +1005,17 @@ class PForConfig(object):
     """
     assert not context.executing_eagerly()
     assert isinstance(x, ops.Tensor)
-    if x.experimental_ref() not in self._reduce_concat_map:
+    if x not in self._reduce_concat_map:
       out_shape = tensor_shape.TensorShape([self._maybe_iters]).concatenate(
           x.shape)
       with ops.control_dependencies([x]):
         # Control dependency to make sure out is converted after x.
         out = array_ops.placeholder(x.dtype, out_shape)
-      self._reduce_concat_map[out.experimental_ref()] = x
-      self._reverse_reduce_concat_map[x.experimental_ref()] = out
+      self._reduce_concat_map[out] = x
+      self._reverse_reduce_concat_map[x] = out
       return out
     else:
-      return self._reverse_reduce_concat_map[x.experimental_ref()]
+      return self._reverse_reduce_concat_map[x]
 
   def reduce_mean(self, x):
     """Performs a mean reduction on `x` across pfor iterations.
@@ -1051,7 +1049,7 @@ class PForConfig(object):
     """Lookups Placeholder `pl` in the reduction map."""
     msg = "Expected Tensor, got {} of type {}."
     assert isinstance(pl, ops.Tensor), msg.format(pl, type(pl))
-    return self._reduce_concat_map.get(pl.experimental_ref())
+    return self._reduce_concat_map.get(pl, None)
 
 
 class PFor(object):
@@ -1968,8 +1966,8 @@ def _convert_gather(pfor_input):
       axis = axis_value
   if indices_stacked and not param_stacked:
     if indices is pfor_input.pfor.all_indices and axis == 0:
-      param_shape0 = tensor_shape.dimension_value(param.shape[0])
-      indices_shape0 = tensor_shape.dimension_value(indices.shape[0])
+      param_shape0 = param.shape.dims[0].value
+      indices_shape0 = indices.shape.dims[0].value
       if param_shape0 is not None and indices_shape0 == param_shape0:
         # Note that with loops and conditionals, indices may not be contiguous.
         # However they will be sorted and unique. So if the shape matches, then
@@ -2023,19 +2021,6 @@ def _convert_gather(pfor_input):
         [check_ops.assert_equal(axis, 0, message=msg)]):
       output = array_ops.gather(param_flat, indices)
     return wrap(output, True)
-
-
-@RegisterPFor("GatherNd")
-def _convert_gather_nd(pfor_input):
-  # TODO(jmenick): Add support for unstacked params.
-  pfor_input.stack_inputs(stack_indices=[1])
-  params = pfor_input.stacked_input(0)
-  indices = pfor_input.stacked_input(1)
-  stacked_result = array_ops.gather_nd(
-      params,
-      indices,
-      batch_dims=1)
-  return wrap(stacked_result, True)
 
 
 @RegisterPFor("ConcatV2")
@@ -2119,6 +2104,7 @@ def _convert_strided_slice_grad(pfor_input):
 
 
 # math_ops
+
 
 @RegisterPFor("MatMul")
 def _convert_matmul(pfor_input):
@@ -2285,82 +2271,6 @@ def _convert_unsortedsegmentsum(pfor_input):
   new_output_shape = array_ops.concat(
       [[n, -1], array_ops.shape(output)[1:]], axis=0)
   output = array_ops.reshape(output, new_output_shape)
-  return wrap(output, True)
-
-
-def _flatten_array_with_offset(ids, offset_delta, num_rows):
-  """Flattens a rank 2 tensor, adding an offset to each row."""
-  # Note that if `ids` is rank 1, it is broadcast to rank 2.
-  offset_delta = math_ops.cast(offset_delta, ids.dtype)
-  n = math_ops.cast(num_rows, dtype=ids.dtype)
-  offsets = math_ops.range(
-      start=0, limit=n * offset_delta, delta=offset_delta, dtype=ids.dtype)
-  offsets = array_ops.expand_dims(offsets, -1)
-  ids += offsets
-  return array_ops.reshape(ids, [-1])
-
-
-@RegisterPForWithArgs("SparseSegmentSum", math_ops.sparse_segment_sum_v2)
-@RegisterPForWithArgs("SparseSegmentMean", math_ops.sparse_segment_mean_v2)
-@RegisterPForWithArgs("SparseSegmentSqrtN", math_ops.sparse_segment_sqrt_n_v2)
-@RegisterPForWithArgs("SparseSegmentSumWithNumSegments",
-                      math_ops.sparse_segment_sum_v2)
-@RegisterPForWithArgs("SparseSegmentMeanWithNumSegments",
-                      math_ops.sparse_segment_mean_v2)
-@RegisterPForWithArgs("SparseSegmentSqrtNWithNumSegments",
-                      math_ops.sparse_segment_sqrt_n_v2)
-def _convert_sparse_segment(pfor_input, _, op_func):
-  _, segment_ids_stacked, _ = pfor_input.input(2)
-  if segment_ids_stacked:
-    pfor_input.stack_inputs([1])
-  data, data_stacked, _ = pfor_input.input(0)
-  indices, _, _ = pfor_input.input(1)
-  num_inputs = len(pfor_input.inputs)
-  assert num_inputs in (3, 4)
-  if num_inputs == 3:
-    # `segment_ids` needs to be unstacked since otherwise output sizes could
-    # differ across pfor iterations.
-    segment_ids = pfor_input.unstacked_input(2)
-    num_segments = nn_ops.relu(math_ops.reduce_max(segment_ids) + 1)
-  else:
-    segment_ids, _, _ = pfor_input.input(2)
-    num_segments = pfor_input.unstacked_input(3)
-
-  n = pfor_input.pfor.loop_len_vector[0]
-  if data_stacked:
-    indices = _flatten_array_with_offset(indices, array_ops.shape(data)[1], n)
-    data = _flatten_first_two_dims(data)
-  else:
-    indices = array_ops.reshape(indices, [-1])
-  segment_ids = _flatten_array_with_offset(segment_ids, num_segments, n)
-
-  if num_inputs == 3:
-    num_segments = None
-  else:
-    num_segments *= n
-  output = op_func(data, indices, segment_ids, num_segments=num_segments)
-  output = _unflatten_first_dim(output, [n])
-  return wrap(output, True)
-
-
-@RegisterPForWithArgs("SparseSegmentMeanGrad",
-                      math_ops.sparse_segment_mean_grad)
-@RegisterPForWithArgs("SparseSegmentSqrtNGrad",
-                      math_ops.sparse_segment_sqrt_n_grad)
-def _convert_sparse_segment_grad(pfor_input, _, op_func):
-  grad = pfor_input.stacked_input(0)
-  indices = pfor_input.unstacked_input(1)
-  segment_ids = pfor_input.unstacked_input(2)
-  dim0 = pfor_input.unstacked_input(3)
-
-  n = pfor_input.pfor.loop_len_vector[0]
-  indices = _flatten_array_with_offset(indices, dim0, n)
-  num_segments = nn_ops.relu(math_ops.reduce_max(segment_ids) + 1)
-  segment_ids = _flatten_array_with_offset(segment_ids, num_segments, n)
-  grad = _flatten_first_two_dims(grad)
-  dim0 *= n
-  output = op_func(grad, indices, segment_ids, dim0)
-  output = _unflatten_first_dim(output, [n])
   return wrap(output, True)
 
 
@@ -2537,14 +2447,6 @@ def _convert_addn(pfor_input):
   return wrap(math_ops.add_n([x.t for x in pfor_input.inputs]), True)
 
 
-@RegisterPFor("Cross")
-def _convert_cross(pfor_input):
-  pfor_input.stack_inputs()
-  a = pfor_input.stacked_input(0)
-  b = pfor_input.stacked_input(1)
-  return wrap(math_ops.cross(a, b), True)
-
-
 @RegisterPFor("BiasAddGrad")
 def _convert_biasaddgrad(pfor_input):
   grad = pfor_input.stacked_input(0)
@@ -2709,44 +2611,6 @@ def _convert_multinomial(pfor_input):
 
 
 # linalg_ops
-
-# TODO(jmenick) - the same logic applies to other einsums. Generalize this
-# in a future CL.
-@RegisterPFor("XlaEinsum")
-def _convert_einsum(pfor_input):
-  first_input, first_input_stacked, _ = pfor_input.input(0)
-  second_input, second_input_stacked, _ = pfor_input.input(1)
-
-  # Parse the einsum equation.
-  equation = pfor_input.get_attr("equation").decode("utf-8")
-  input_expr, output_expr = equation.split("->")
-  input_a_expr, input_b_expr = input_expr.split(",")
-
-  # pick a placeholder symbol to use for the new axis
-  chosen_symbol = None
-  for s in string.ascii_letters:
-    if s in equation:
-      continue
-    else:
-      chosen_symbol = s
-      break
-
-  if chosen_symbol is None:
-    raise ValueError("Could not figure out what symbol to use for new axis.")
-
-  assert first_input_stacked or second_input_stacked
-  if first_input_stacked:
-    input_a_expr = "{}{}".format(chosen_symbol, input_a_expr)
-  if second_input_stacked:
-    input_b_expr = "{}{}".format(chosen_symbol, input_b_expr)
-  output_expr = "{}{}".format(chosen_symbol, output_expr)
-
-  new_equation = "{},{}->{}".format(input_a_expr, input_b_expr, output_expr)
-  result = xla.einsum(
-      equation=new_equation,
-      a=first_input,
-      b=second_input)
-  return wrap(result, True)
 
 
 @RegisterPFor("Cholesky")

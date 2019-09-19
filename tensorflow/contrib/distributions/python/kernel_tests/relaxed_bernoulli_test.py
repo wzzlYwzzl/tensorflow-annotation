@@ -24,7 +24,6 @@ from tensorflow.contrib.distributions.python.ops import relaxed_bernoulli
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import errors_impl
-from tensorflow.python.framework import test_util
 from tensorflow.python.platform import test
 
 
@@ -95,11 +94,12 @@ class RelaxedBernoulliTest(test.TestCase):
     """If validate_args, raises InvalidArgumentError when temperature is 0."""
     temperature = constant_op.constant(0.0)
     p = constant_op.constant([0.1, 0.4])
-    with self.assertRaisesWithPredicateMatch(errors_impl.InvalidArgumentError,
-                                             "x > 0 did not hold"):
-      _ = relaxed_bernoulli.RelaxedBernoulli(
-          temperature, probs=p, validate_args=True)
-      # Error detected statically; no need to run the op.
+    dist = relaxed_bernoulli.RelaxedBernoulli(temperature, probs=p,
+                                              validate_args=True)
+    with self.cached_session():
+      sample = dist.sample()
+      with self.assertRaises(errors_impl.InvalidArgumentError):
+        sample.eval()
 
   def testDtype(self):
     temperature = constant_op.constant(1.0, dtype=dtypes.float32)
@@ -137,8 +137,6 @@ class RelaxedBernoulliTest(test.TestCase):
       self.assertAllClose(np.nan, dist.log_prob(0.0).eval())
       self.assertAllClose([np.nan], [dist.log_prob(1.0).eval()])
 
-  @test_util.disable_xla(
-      "TODO(b/141092326): prevent negative values in Sigmoid on XLA:CPU")
   def testSampleN(self):
     """mean of quantized samples still approximates the Bernoulli mean."""
     with self.cached_session():

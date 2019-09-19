@@ -1,3 +1,5 @@
+# -*- Python -*-
+
 load("//tensorflow:tensorflow.bzl", "tf_py_test")
 
 # Create a benchmark test target of a TensorFlow C++ test (tf_cc_*_test)

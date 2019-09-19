@@ -27,49 +27,29 @@ using namespace mlir;
 void mlir::replaceAllUsesInRegionWith(Value *orig, Value *replacement,
                                       Region &region) {
   for (IROperand &use : llvm::make_early_inc_range(orig->getUses())) {
-    if (region.isAncestor(use.getOwner()->getParentRegion()))
+    if (region.isAncestor(use.getOwner()->getContainingRegion()))
       use.set(replacement);
   }
 }
 
-void mlir::visitUsedValuesDefinedAbove(
-    Region &region, Region &limit,
-    llvm::function_ref<void(OpOperand *)> callback) {
+void mlir::getUsedValuesDefinedAbove(Region &region, Region &limit,
+                                     llvm::SetVector<Value *> &values) {
   assert(limit.isAncestor(&region) &&
          "expected isolation limit to be an ancestor of the given region");
 
   // Collect proper ancestors of `limit` upfront to avoid traversing the region
   // tree for every value.
   llvm::SmallPtrSet<Region *, 4> properAncestors;
-  for (auto *reg = limit.getParentRegion(); reg != nullptr;
-       reg = reg->getParentRegion()) {
+  for (auto *reg = limit.getContainingRegion(); reg != nullptr;
+       reg = reg->getContainingRegion()) {
     properAncestors.insert(reg);
   }
 
-  region.walk([callback, &properAncestors](Operation *op) {
-    for (OpOperand &operand : op->getOpOperands())
-      // Callback on values defined in a proper ancestor of region.
-      if (properAncestors.count(operand.get()->getParentRegion()))
-        callback(&operand);
+  region.walk([&values, &properAncestors](Operation *op) {
+    for (Value *operand : op->getOperands())
+      // Collect values that are used by an operation and defined in a proper
+      // ancestor of region.
+      if (properAncestors.count(operand->getContainingRegion()))
+        values.insert(operand);
   });
-}
-
-void mlir::visitUsedValuesDefinedAbove(
-    llvm::MutableArrayRef<Region> regions,
-    llvm::function_ref<void(OpOperand *)> callback) {
-  for (Region &region : regions)
-    visitUsedValuesDefinedAbove(region, region, callback);
-}
-
-void mlir::getUsedValuesDefinedAbove(Region &region, Region &limit,
-                                     llvm::SetVector<Value *> &values) {
-  visitUsedValuesDefinedAbove(region, limit, [&](OpOperand *operand) {
-    values.insert(operand->get());
-  });
-}
-
-void mlir::getUsedValuesDefinedAbove(llvm::MutableArrayRef<Region> regions,
-                                     llvm::SetVector<Value *> &values) {
-  for (Region &region : regions)
-    getUsedValuesDefinedAbove(region, region, values);
 }

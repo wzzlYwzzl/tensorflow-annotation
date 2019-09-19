@@ -130,7 +130,7 @@ class InitializeTableFromTextFileOp : public OpKernel {
         errors::InvalidArgument("filename should be a single string, but got ",
                                 vocab_filename_tensor.shape().DebugString()));
 
-    const string& vocab_filename = vocab_filename_tensor.scalar<tstring>()();
+    string vocab_filename = vocab_filename_tensor.scalar<string>()();
     OP_REQUIRES(ctx, !vocab_filename.empty(),
                 errors::InvalidArgument("filename cannot be empty."));
 

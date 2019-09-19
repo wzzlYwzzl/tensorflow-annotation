@@ -122,8 +122,26 @@ tf_py_test(
     size = "small",
     srcs = ["filter_test.py"],
     additional_deps = [
+        ":filter_test_base",
+        "//tensorflow/python:client_testlib",
+    ],
+)
+
+tf_py_test(
+    name = "filter_with_legacy_function_test",
+    size = "small",
+    srcs = ["filter_with_legacy_function_test.py"],
+    additional_deps = [
+        ":filter_test_base",
+        "//tensorflow/python:client_testlib",
+    ],
+)
+
+py_library(
+    name = "filter_test_base",
+    srcs = ["filter_test_base.py"],
+    deps = [
         ":test_base",
-        "//third_party/py/numpy",
         "//tensorflow/python:array_ops",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:dtypes",
@@ -132,6 +150,7 @@ tf_py_test(
         "//tensorflow/python:math_ops",
         "//tensorflow/python:sparse_tensor",
         "//tensorflow/python/data/ops:dataset_ops",
+        "//third_party/py/numpy",
     ],
 )
 
@@ -544,7 +563,6 @@ cuda_py_test(
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:dtypes",
         "//tensorflow/python:math_ops",
-        "//tensorflow/python/data/experimental/ops:optimization",
         "//tensorflow/python:sparse_tensor",
         "//tensorflow/python/data/ops:dataset_ops",
     ],

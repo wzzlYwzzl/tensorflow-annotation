@@ -72,9 +72,7 @@ class UniqueDatasetOp : public UnaryDatasetOpKernel {
       return strings::StrCat("UniqueDatasetOp::Dataset");
     }
 
-    Status CheckExternalState() const override {
-      return input_->CheckExternalState();
-    }
+    bool IsStateful() const override { return input_->IsStateful(); }
 
    protected:
     Status AsGraphDefInternal(SerializationContext* ctx,
@@ -173,7 +171,7 @@ class UniqueDatasetOp : public UnaryDatasetOpKernel {
             return Hash64(t.tensor_data().data(), t.tensor_data().size());
           } else {
             DCHECK_EQ(DT_STRING, t.dtype());
-            auto flat_t = t.flat<tstring>();
+            auto flat_t = t.flat<string>();
             uint64 hash = 0;
             for (int64 i = 0; i < t.NumElements(); ++i) {
               hash = Hash64Combine(hash, Hash64(flat_t(i)));

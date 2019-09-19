@@ -318,7 +318,7 @@ string TFStats::MaybeReportMissingTrace() const {
         "stream stats!\n\n"
         "It's likely a gpu tracing issue rather than tf-profiler issue.\n"
         "If you found your operation missing accelerator time, "
-        "consider to post to discuss@tensorflow.org!\n\n";
+        "consider filing a bug to xprof-dev@!\n\n";
   }
   return report;
 }

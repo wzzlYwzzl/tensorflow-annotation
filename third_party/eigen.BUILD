@@ -11,6 +11,22 @@ licenses([
 
 exports_files(["COPYING.MPL2"])
 
+# License-restricted (i.e. not reciprocal or notice) files inside Eigen/...
+EIGEN_RESTRICTED_FILES = [
+    "Eigen/src/OrderingMethods/Amd.h",
+    "Eigen/src/SparseCholesky/**",
+]
+
+# Notable transitive dependencies of restricted files inside Eigen/...
+EIGEN_RESTRICTED_DEPS = [
+    "Eigen/Eigen",
+    "Eigen/IterativeLinearSolvers",
+    "Eigen/MetisSupport",
+    "Eigen/Sparse",
+    "Eigen/SparseCholesky",
+    "Eigen/SparseLU",
+]
+
 EIGEN_FILES = [
     "Eigen/**",
     "unsupported/Eigen/CXX11/**",
@@ -24,12 +40,18 @@ EIGEN_FILES = [
     "unsupported/Eigen/src/SpecialFunctions/**",
 ]
 
+# List of files picked up by glob but actually part of another target.
+EIGEN_EXCLUDE_FILES = [
+    "Eigen/src/Core/arch/AVX/PacketMathGoogleTest.cc",
+]
+
 # Files known to be under MPL2 license.
 EIGEN_MPL2_HEADER_FILES = glob(
     EIGEN_FILES,
-    exclude = [
-        # Guarantees that any non-MPL2 file added to the list above will fail to
-        # compile.
+    exclude = EIGEN_EXCLUDE_FILES +
+              EIGEN_RESTRICTED_FILES +
+              EIGEN_RESTRICTED_DEPS + [
+        # Guarantees any file missed by excludes above will not compile.
         "Eigen/src/Core/util/NonMPL2.h",
         "Eigen/**/CMakeLists.txt",
     ],

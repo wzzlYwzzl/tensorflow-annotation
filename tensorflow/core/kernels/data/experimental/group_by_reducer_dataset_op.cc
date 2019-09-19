@@ -112,12 +112,11 @@ class GroupByReducerDatasetOp : public UnaryDatasetOpKernel {
       return "GroupByReducerDatasetOp::Dataset";
     }
 
-    Status CheckExternalState() const override {
-      TF_RETURN_IF_ERROR(captured_key_func_->CheckExternalState());
-      TF_RETURN_IF_ERROR(captured_init_func_->CheckExternalState());
-      TF_RETURN_IF_ERROR(captured_reduce_func_->CheckExternalState());
-      TF_RETURN_IF_ERROR(captured_finalize_func_->CheckExternalState());
-      return input_->CheckExternalState();
+    bool IsStateful() const override {
+      return captured_key_func_->IsStateful() ||
+             captured_init_func_->IsStateful() ||
+             captured_reduce_func_->IsStateful() ||
+             captured_finalize_func_->IsStateful() || input_->IsStateful();
     }
 
    protected:

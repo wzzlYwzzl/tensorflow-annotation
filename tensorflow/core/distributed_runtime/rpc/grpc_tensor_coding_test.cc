@@ -65,11 +65,11 @@ class GrpcTensorCodingTest : public ::testing::Test {
     }
   }
   void DoTestForStrings(DataType dt) {
-    gtl::InlinedVector<tstring, 4> v;
+    gtl::InlinedVector<string, 4> v;
     for (int elems = 0; elems <= 10000; elems++) {
       if (elems < 100 || (elems % 1000 == 0)) {
         Tensor a(dt, TensorShape({1, static_cast<int64>(v.size())}));
-        test::FillValues<tstring>(&a, v);
+        test::FillValues<string>(&a, v);
         Validate(a, (elems == 0));
       }
       v.push_back(strings::StrCat("This is string ", elems));

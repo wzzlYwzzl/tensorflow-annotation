@@ -203,7 +203,6 @@ py_library(
         "//tensorflow/python/ops/losses",
         "//tensorflow/python/tpu:tensor_tracer_proto_py",
         "//tensorflow/python/tpu/profiler",
-        "@six_archive//:six",
     ],
 )
 
@@ -258,7 +257,7 @@ tf_py_test(
     size = "small",
     srcs = ["tpu_sharding_test.py"],
     additional_deps = [
-        ":tpu",
+        ":tpu_lib",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:framework",
     ],
@@ -269,7 +268,7 @@ tf_py_test(
     size = "small",
     srcs = ["bfloat16_test.py"],
     additional_deps = [
-        ":tpu",
+        ":tpu_lib",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:framework",
     ],
@@ -280,7 +279,7 @@ tf_py_test(
     size = "small",
     srcs = ["tpu_infeed_test.py"],
     additional_deps = [
-        ":tpu",
+        ":tpu_lib",
         "//tensorflow/python:framework",
         "//tensorflow/python:framework_test_lib",
     ],
@@ -291,7 +290,7 @@ tf_py_test(
     size = "medium",
     srcs = ["topology_test.py"],
     additional_deps = [
-        ":tpu",
+        ":tpu_lib",
         "//tensorflow/python:framework_test_lib",
     ],
 )

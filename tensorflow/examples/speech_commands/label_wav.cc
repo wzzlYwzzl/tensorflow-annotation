@@ -26,11 +26,10 @@ limitations under the License.
 
 // These are all common classes it's handy to reference with no namespace.
 using tensorflow::Flag;
-using tensorflow::int32;
 using tensorflow::Status;
-using tensorflow::string;
 using tensorflow::Tensor;
-using tensorflow::tstring;
+using tensorflow::int32;
+using tensorflow::string;
 
 namespace {
 
@@ -150,7 +149,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   Tensor wav_tensor(tensorflow::DT_STRING, tensorflow::TensorShape({}));
-  wav_tensor.scalar<tstring>()() = wav_string;
+  wav_tensor.scalar<string>()() = wav_string;
 
   // Actually run the audio through the model.
   std::vector<Tensor> outputs;

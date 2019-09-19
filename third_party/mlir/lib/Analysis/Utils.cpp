@@ -22,11 +22,11 @@
 
 #include "mlir/Analysis/Utils.h"
 
+#include "mlir/AffineOps/AffineOps.h"
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/AffineStructures.h"
-#include "mlir/Dialect/AffineOps/AffineOps.h"
-#include "mlir/Dialect/StandardOps/Ops.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/StandardOps/Ops.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/Debug.h"
@@ -449,7 +449,7 @@ static void findInstPosition(Operation *op, Block *limitBlock,
     // rely on linear scans.
     int instPosInBlock = std::distance(block->begin(), op->getIterator());
     positions->push_back(instPosInBlock);
-    op = block->getParentOp();
+    op = block->getContainingOp();
     block = op->getBlock();
   }
   std::reverse(positions->begin(), positions->end());
@@ -847,7 +847,7 @@ MemRefAccess::MemRefAccess(Operation *loadOrStoreOpInst) {
     opInst = loadOrStoreOpInst;
     auto loadMemrefType = loadOp.getMemRefType();
     indices.reserve(loadMemrefType.getRank());
-    for (auto *index : loadOp.getMapOperands()) {
+    for (auto *index : loadOp.getIndices()) {
       indices.push_back(index);
     }
   } else {
@@ -857,7 +857,7 @@ MemRefAccess::MemRefAccess(Operation *loadOrStoreOpInst) {
     memref = storeOp.getMemRef();
     auto storeMemrefType = storeOp.getMemRefType();
     indices.reserve(storeMemrefType.getRank());
-    for (auto *index : storeOp.getMapOperands()) {
+    for (auto *index : storeOp.getIndices()) {
       indices.push_back(index);
     }
   }
@@ -905,31 +905,35 @@ static Optional<int64_t> getMemoryFootprintBytes(Block &block,
   SmallDenseMap<Value *, std::unique_ptr<MemRefRegion>, 4> regions;
 
   // Walk this 'affine.for' operation to gather all memory regions.
-  auto result = block.walk(start, end, [&](Operation *opInst) -> WalkResult {
+  bool error = false;
+  block.walk(start, end, [&](Operation *opInst) {
     if (!isa<AffineLoadOp>(opInst) && !isa<AffineStoreOp>(opInst)) {
       // Neither load nor a store op.
-      return WalkResult::advance();
+      return;
     }
 
     // Compute the memref region symbolic in any IVs enclosing this block.
-    auto region = std::make_unique<MemRefRegion>(opInst->getLoc());
+    auto region = llvm::make_unique<MemRefRegion>(opInst->getLoc());
     if (failed(
             region->compute(opInst,
                             /*loopDepth=*/getNestingDepth(*block.begin())))) {
-      return opInst->emitError("error obtaining memory region\n");
+      opInst->emitError("Error obtaining memory region\n");
+      error = true;
+      return;
     }
-
     auto it = regions.find(region->memref);
     if (it == regions.end()) {
       regions[region->memref] = std::move(region);
     } else if (failed(it->second->unionBoundingBox(*region))) {
-      return opInst->emitWarning(
+      opInst->emitWarning(
           "getMemoryFootprintBytes: unable to perform a union on a memory "
           "region");
+      error = true;
+      return;
     }
-    return WalkResult::advance();
   });
-  if (result.wasInterrupted())
+
+  if (error)
     return None;
 
   int64_t totalSizeInBytes = 0;
@@ -965,18 +969,17 @@ void mlir::getSequentialLoops(
 bool mlir::isLoopParallel(AffineForOp forOp) {
   // Collect all load and store ops in loop nest rooted at 'forOp'.
   SmallVector<Operation *, 8> loadAndStoreOpInsts;
-  auto walkResult = forOp.walk([&](Operation *opInst) {
+  bool hasSideEffectingOps = false;
+  forOp.getOperation()->walk([&](Operation *opInst) {
     if (isa<AffineLoadOp>(opInst) || isa<AffineStoreOp>(opInst))
-      loadAndStoreOpInsts.push_back(opInst);
-    else if (!isa<AffineForOp>(opInst) && !isa<AffineTerminatorOp>(opInst) &&
-             !isa<AffineIfOp>(opInst) && !opInst->hasNoSideEffect())
-      return WalkResult::interrupt();
-
-    return WalkResult::advance();
+      return loadAndStoreOpInsts.push_back(opInst);
+    if (!isa<AffineForOp>(opInst) && !isa<AffineTerminatorOp>(opInst) &&
+        !isa<AffineIfOp>(opInst) && !opInst->hasNoSideEffect()) {
+      hasSideEffectingOps = true;
+    }
   });
-
   // Stop early if the loop has unknown ops with side effects.
-  if (walkResult.wasInterrupted())
+  if (hasSideEffectingOps)
     return false;
 
   // Dep check depth would be number of enclosing loops + 1.

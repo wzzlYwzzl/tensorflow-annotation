@@ -52,9 +52,6 @@ public:
   AffineMap(const AffineMap &other) : map(other.map) {}
   AffineMap &operator=(const AffineMap &other) = default;
 
-  /// Returns a zero result affine map with no dimensions or symbols: () -> ().
-  static AffineMap get(MLIRContext *context);
-
   static AffineMap get(unsigned dimCount, unsigned symbolCount,
                        ArrayRef<AffineExpr> results);
 
@@ -75,9 +72,6 @@ public:
   /// An identity affine map corresponds to an identity affine function on the
   /// dimensional identifiers.
   bool isIdentity() const;
-
-  /// Returns true if this affine map is an empty map, i.e., () -> ().
-  bool isEmpty() const;
 
   /// Returns true if this affine map is a single result constant function.
   bool isSingleConstant() const;
@@ -147,9 +141,6 @@ public:
 
 private:
   ImplType *map;
-
-  static AffineMap getImpl(unsigned dimCount, unsigned symbolCount,
-                           ArrayRef<AffineExpr> results, MLIRContext *context);
 };
 
 // Make AffineExpr hashable.

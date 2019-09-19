@@ -21,6 +21,7 @@
 
 #include "mlir/Target/LLVMIR.h"
 
+#include "mlir/Support/FileUtilities.h"
 #include "mlir/Target/LLVMIR/ModuleTranslation.h"
 #include "mlir/Translation.h"
 
@@ -35,11 +36,19 @@ std::unique_ptr<llvm::Module> mlir::translateModuleToLLVMIR(ModuleOp m) {
 }
 
 static TranslateFromMLIRRegistration registration(
-    "mlir-to-llvmir", [](ModuleOp module, llvm::raw_ostream &output) {
+    "mlir-to-llvmir", [](ModuleOp module, llvm::StringRef outputFilename) {
+      if (!module)
+        return failure();
+
       auto llvmModule = LLVM::ModuleTranslation::translateModule<>(module);
       if (!llvmModule)
         return failure();
 
-      llvmModule->print(output, nullptr);
+      auto file = openOutputFile(outputFilename);
+      if (!file)
+        return failure();
+
+      llvmModule->print(file->os(), nullptr);
+      file->keep();
       return success();
     });

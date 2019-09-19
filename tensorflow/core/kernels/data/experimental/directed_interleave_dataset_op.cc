@@ -107,11 +107,13 @@ class DirectedInterleaveDatasetOp : public DatasetOpKernel {
       return strings::StrCat("DirectedInterleaveDatasetOp::Dataset");
     }
 
-    Status CheckExternalState() const override {
+    bool IsStateful() const override {
       for (const auto& input : data_inputs_) {
-        TF_RETURN_IF_ERROR(input->CheckExternalState());
+        if (input->IsStateful()) {
+          return true;
+        }
       }
-      return selector_input_->CheckExternalState();
+      return selector_input_->IsStateful();
     }
 
    protected:
@@ -176,8 +178,7 @@ class DirectedInterleaveDatasetOp : public DatasetOpKernel {
           }
 
           int64 selected_input = selector_result[0].scalar<int64>()();
-          if (selected_input < 0 ||
-              selected_input >= data_input_impls_.size()) {
+          if (selected_input < 0 || selected_input > data_input_impls_.size()) {
             return errors::InvalidArgument(
                 "Selector index out of range: ", selected_input,
                 " >= ", data_input_impls_.size());

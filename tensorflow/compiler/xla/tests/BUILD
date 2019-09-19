@@ -745,9 +745,7 @@ xla_test(
         "no_oss",
     ],
     deps = [
-        ":client_library_test_base",
         ":exhaustive_op_test_utils",
-        "//tensorflow/compiler/xla:util",
     ],
 )
 
@@ -767,9 +765,7 @@ xla_test(
         "no_oss",
     ],
     deps = [
-        ":client_library_test_base",
         ":exhaustive_op_test_utils",
-        "//tensorflow/compiler/xla:util",
     ],
 )
 
@@ -789,9 +785,7 @@ xla_test(
         "no_oss",
     ],
     deps = [
-        ":client_library_test_base",
         ":exhaustive_op_test_utils",
-        "//tensorflow/compiler/xla:util",
     ],
 )
 
@@ -1287,17 +1281,16 @@ xla_test(
     srcs = ["slice_test.cc"],
     shard_count = 40,
     deps = [
-        ":client_library_test_base",
-        ":literal_test_util",
         ":test_macros_header",
-        ":xla_internal_test_main",
         "//tensorflow/compiler/xla:array2d",
         "//tensorflow/compiler/xla:reference_util",
         "//tensorflow/compiler/xla/client:local_client",
         "//tensorflow/compiler/xla/client:xla_builder",
+        "//tensorflow/compiler/xla/tests:client_library_test_base",
+        "//tensorflow/compiler/xla/tests:literal_test_util",
+        "//tensorflow/compiler/xla/tests:xla_internal_test_main",
         "//tensorflow/core:lib",
         "//tensorflow/core:test",
-        "//tensorflow/core/platform:types",
         "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
@@ -1657,7 +1650,6 @@ xla_test(
     name = "fmax_fmin_test",
     srcs = ["fmax_fmin_test.cc"],
     deps = [
-        ":test_macros_header",
         "//tensorflow/compiler/xla/client:local_client",
         "//tensorflow/compiler/xla/client:xla_builder",
         "//tensorflow/compiler/xla/client:xla_computation",
@@ -1897,7 +1889,6 @@ xla_test(
         "//tensorflow/compiler/xla/service:hlo",
         "//tensorflow/compiler/xla/service:hlo_parser",
         "//tensorflow/compiler/xla/service:hlo_runner",
-        "//tensorflow/compiler/xla/service/gpu:nccl_all_reduce_thunk",
         "//tensorflow/compiler/xla/tests:client_library_test_base",
         "//tensorflow/compiler/xla/tests:hlo_test_base",
         "//tensorflow/compiler/xla/tests:literal_test_util",
@@ -2108,6 +2099,7 @@ tf_cc_test(
         "//tensorflow/compiler/xla/service:llvm_compiler",
         "//tensorflow/compiler/xla/service:platform_util",
         "//tensorflow/compiler/xla/service/cpu:cpu_compiler",
+        "//tensorflow/compiler/xla/service/gpu:nvptx_compiler",
         "//tensorflow/compiler/xla/service/gpu:nvptx_compiler_impl",
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",

@@ -21,22 +21,20 @@
 
 #include "mlir/Dialect/SPIRV/SPIRVTypes.h"
 #include "mlir/IR/StandardTypes.h"
-#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 
 using namespace mlir;
 using namespace mlir::spirv;
 
 // Pull in all enum utility function definitions
-#include "mlir/Dialect/SPIRV/SPIRVBitEnums.cpp.inc"
-#include "mlir/Dialect/SPIRV/SPIRVIntEnums.cpp.inc"
+#include "mlir/Dialect/SPIRV/SPIRVEnums.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // ArrayType
 //===----------------------------------------------------------------------===//
 
 struct spirv::detail::ArrayTypeStorage : public TypeStorage {
-  using KeyTy = std::tuple<Type, unsigned, ArrayType::LayoutInfo>;
+  using KeyTy = std::pair<Type, unsigned>;
 
   static ArrayTypeStorage *construct(TypeStorageAllocator &allocator,
                                      const KeyTy &key) {
@@ -44,26 +42,18 @@ struct spirv::detail::ArrayTypeStorage : public TypeStorage {
   }
 
   bool operator==(const KeyTy &key) const {
-    return key == KeyTy(elementType, getSubclassData(), layoutInfo);
+    return key == KeyTy(elementType, getSubclassData());
   }
 
   ArrayTypeStorage(const KeyTy &key)
-      : TypeStorage(std::get<1>(key)), elementType(std::get<0>(key)),
-        layoutInfo(std::get<2>(key)) {}
+      : TypeStorage(key.second), elementType(key.first) {}
 
   Type elementType;
-  ArrayType::LayoutInfo layoutInfo;
 };
 
 ArrayType ArrayType::get(Type elementType, unsigned elementCount) {
   return Base::get(elementType.getContext(), TypeKind::Array, elementType,
-                   elementCount, 0);
-}
-
-ArrayType ArrayType::get(Type elementType, unsigned elementCount,
-                         ArrayType::LayoutInfo layoutInfo) {
-  return Base::get(elementType.getContext(), TypeKind::Array, elementType,
-                   elementCount, layoutInfo);
+                   elementCount);
 }
 
 unsigned ArrayType::getNumElements() const {
@@ -71,11 +61,6 @@ unsigned ArrayType::getNumElements() const {
 }
 
 Type ArrayType::getElementType() const { return getImpl()->elementType; }
-
-// ArrayStride must be greater than zero
-bool ArrayType::hasLayout() const { return getImpl()->layoutInfo; }
-
-uint64_t ArrayType::getArrayStride() const { return getImpl()->layoutInfo; }
 
 //===----------------------------------------------------------------------===//
 // CompositeType

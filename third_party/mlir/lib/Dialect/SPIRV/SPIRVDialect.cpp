@@ -13,7 +13,6 @@
 #include "mlir/Dialect/SPIRV/SPIRVDialect.h"
 #include "mlir/Dialect/SPIRV/SPIRVOps.h"
 #include "mlir/Dialect/SPIRV/SPIRVTypes.h"
-#include "mlir/IR/Builders.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/StandardTypes.h"
 #include "mlir/Parser.h"
@@ -41,7 +40,6 @@ SPIRVDialect::SPIRVDialect(MLIRContext *context)
     : Dialect(getDialectNamespace(), context) {
   addTypes<ArrayType, ImageType, PointerType, RuntimeArrayType, StructType>();
 
-  // Add SPIR-V ops.
   addOperations<
 #define GET_OP_LIST
 #include "mlir/Dialect/SPIRV/SPIRVOps.cpp.inc"
@@ -54,18 +52,6 @@ SPIRVDialect::SPIRVDialect(MLIRContext *context)
 //===----------------------------------------------------------------------===//
 // Type Parsing
 //===----------------------------------------------------------------------===//
-
-// Forward declarations.
-template <typename ValTy>
-static Optional<ValTy> parseAndVerify(SPIRVDialect const &dialect, Location loc,
-                                      StringRef spec);
-template <>
-Optional<Type> parseAndVerify<Type>(SPIRVDialect const &dialect, Location loc,
-                                    StringRef spec);
-
-template <>
-Optional<uint64_t> parseAndVerify(SPIRVDialect const &dialect, Location loc,
-                                  StringRef spec);
 
 // Parses "<number> x" from the beginning of `spec`.
 static bool parseNumberX(StringRef &spec, int64_t &number) {
@@ -86,37 +72,29 @@ static bool parseNumberX(StringRef &spec, int64_t &number) {
   return true;
 }
 
-static bool isValidSPIRVIntType(IntegerType type) {
-  return llvm::is_contained(llvm::ArrayRef<unsigned>({1, 8, 16, 32, 64}),
-                            type.getWidth());
-}
-
 static bool isValidSPIRVScalarType(Type type) {
   if (type.isa<FloatType>()) {
     return !type.isBF16();
   }
   if (auto intType = type.dyn_cast<IntegerType>()) {
-    return isValidSPIRVIntType(intType);
+    return llvm::is_contained(llvm::ArrayRef<unsigned>({1, 8, 16, 32, 64}),
+                              intType.getWidth());
   }
   return false;
 }
 
-static bool isValidSPIRVVectorType(VectorType type) {
-  return type.getRank() == 1 && isValidSPIRVScalarType(type.getElementType()) &&
-         type.getNumElements() >= 2 && type.getNumElements() <= 4;
-}
-
-bool SPIRVDialect::isValidType(Type type) {
+bool SPIRVDialect::isValidSPIRVType(Type type) const {
   // Allow SPIR-V dialect types
-  if (type.getKind() >= Type::FIRST_SPIRV_TYPE &&
-      type.getKind() <= TypeKind::LAST_SPIRV_TYPE) {
+  if (&type.getDialect() == this) {
     return true;
   }
   if (isValidSPIRVScalarType(type)) {
     return true;
   }
   if (auto vectorType = type.dyn_cast<VectorType>()) {
-    return isValidSPIRVVectorType(vectorType);
+    return (isValidSPIRVScalarType(vectorType.getElementType()) &&
+            vectorType.getNumElements() >= 2 &&
+            vectorType.getNumElements() <= 4);
   }
   return false;
 }
@@ -142,8 +120,9 @@ static Type parseAndVerifyType(SPIRVDialect const &dialect, StringRef spec,
       return Type();
     }
   } else if (auto t = type.dyn_cast<IntegerType>()) {
-    if (!isValidSPIRVIntType(t)) {
-      emitError(loc, "only 1/8/16/32/64-bit integer type allowed but found ")
+    if (!llvm::is_contained(llvm::ArrayRef<unsigned>({8, 16, 32, 64}),
+                            t.getWidth())) {
+      emitError(loc, "only 8/16/32/64-bit integer type allowed but found ")
           << type;
       return Type();
     }
@@ -171,8 +150,7 @@ static Type parseAndVerifyType(SPIRVDialect const &dialect, StringRef spec,
 //                | vector-type
 //                | spirv-type
 //
-// array-type ::= `!spv.array<` integer-literal `x` element-type
-//                (`[` integer-literal `]`)? `>`
+// array-type ::= `!spv.array<` integer-literal `x` element-type `>`
 static Type parseArrayType(SPIRVDialect const &dialect, StringRef spec,
                            Location loc) {
   if (!spec.consume_front("array<") || !spec.consume_back(">")) {
@@ -193,37 +171,11 @@ static Type parseArrayType(SPIRVDialect const &dialect, StringRef spec,
     return Type();
   }
 
-  ArrayType::LayoutInfo layoutInfo = 0;
-  size_t lastLSquare;
-
-  // Handle case when element type is not a trivial type
-  auto lastRDelimiter = spec.rfind('>');
-  if (lastRDelimiter != StringRef::npos) {
-    lastLSquare = spec.find('[', lastRDelimiter);
-  } else {
-    lastLSquare = spec.rfind('[');
-  }
-
-  if (lastLSquare != StringRef::npos) {
-    auto layoutSpec = spec.substr(lastLSquare);
-    auto layout =
-        parseAndVerify<ArrayType::LayoutInfo>(dialect, loc, layoutSpec);
-    if (!layout) {
-      return Type();
-    }
-
-    if (!(layoutInfo = layout.getValue())) {
-      emitError(loc, "ArrayStride must be greater than zero");
-      return Type();
-    }
-    spec = spec.substr(0, lastLSquare);
-  }
-
   Type elementType = parseAndVerifyType(dialect, spec, loc);
   if (!elementType)
     return Type();
 
-  return ArrayType::get(elementType, count, layoutInfo);
+  return ArrayType::get(elementType, count);
 }
 
 // TODO(ravishankarm) : Reorder methods to be utilities first and parse*Type
@@ -315,17 +267,18 @@ Optional<Type> parseAndVerify<Type>(SPIRVDialect const &dialect, Location loc,
 }
 
 template <>
-Optional<uint64_t> parseAndVerify(SPIRVDialect const &dialect, Location loc,
-                                  StringRef spec) {
+Optional<spirv::StructType::LayoutInfo>
+parseAndVerify(SPIRVDialect const &dialect, Location loc, StringRef spec) {
   uint64_t offsetVal = std::numeric_limits<uint64_t>::max();
   if (!spec.consume_front("[")) {
     emitError(loc, "expected '[' while parsing layout specification in '")
         << spec << "'";
     return llvm::None;
   }
-  spec = spec.trim();
   if (spec.consumeInteger(10, offsetVal)) {
-    emitError(loc, "expected unsigned integer to specify layout information: '")
+    emitError(
+        loc,
+        "expected unsigned integer to specify offset of member in struct: '")
         << spec << "'";
     return llvm::None;
   }
@@ -339,7 +292,7 @@ Optional<uint64_t> parseAndVerify(SPIRVDialect const &dialect, Location loc,
         << spec << "'";
     return llvm::None;
   }
-  return offsetVal;
+  return spirv::StructType::LayoutInfo{offsetVal};
 }
 
 // Functor object to parse a comma separated list of specs. The function
@@ -577,11 +530,8 @@ Type SPIRVDialect::parseType(StringRef spec, Location loc) const {
 //===----------------------------------------------------------------------===//
 
 static void print(ArrayType type, llvm::raw_ostream &os) {
-  os << "array<" << type.getNumElements() << " x " << type.getElementType();
-  if (type.hasLayout()) {
-    os << " [" << type.getArrayStride() << "]";
-  }
-  os << ">";
+  os << "array<" << type.getNumElements() << " x " << type.getElementType()
+     << ">";
 }
 
 static void print(RuntimeArrayType type, llvm::raw_ostream &os) {
@@ -635,17 +585,4 @@ void SPIRVDialect::printType(Type type, llvm::raw_ostream &os) const {
   default:
     llvm_unreachable("unhandled SPIR-V type");
   }
-}
-
-//===----------------------------------------------------------------------===//
-// Constant
-//===----------------------------------------------------------------------===//
-
-Operation *SPIRVDialect::materializeConstant(OpBuilder &builder,
-                                             Attribute value, Type type,
-                                             Location loc) {
-  if (!ConstantOp::isBuildableWith(type))
-    return nullptr;
-
-  return builder.create<spirv::ConstantOp>(loc, type, value);
 }

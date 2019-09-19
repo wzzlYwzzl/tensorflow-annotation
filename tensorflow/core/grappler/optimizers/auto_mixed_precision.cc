@@ -898,22 +898,6 @@ bool CanForceFP16(const NodeDef& node) {
          !IsStateful(node) && !HasInputOrOutputRefs(node);
 }
 
-int GetCudaVersion(const Cluster& cluster) {
-  auto devices = cluster.GetDevices();
-  for (const auto& device : devices) {
-    const DeviceProperties& device_properties = device.second;
-    if (device_properties.type() == "GPU") {
-      const auto& device_env = device_properties.environment();
-      auto it = device_env.find("cuda");
-      if (it != device_env.end()) {
-        string cuda_version_str = it->second;
-        return std::stoi(cuda_version_str);
-      }
-    }
-  }
-  return 0;
-}
-
 class AutoMixedPrecisionImpl {
  public:
   AutoMixedPrecisionImpl(Cluster* cluster,
@@ -923,8 +907,7 @@ class AutoMixedPrecisionImpl {
         nodes_to_preserve_(nodes_to_preserve),
         graph_(graph),
         id_(id),
-        graph_view_(graph),
-        cuda_version_(GetCudaVersion(*cluster)) {}
+        graph_view_(graph) {}
 
   Status Optimize();
 
@@ -943,7 +926,7 @@ class AutoMixedPrecisionImpl {
   bool IsOnSuitableGPUArch(const NodeDef& node) const;
   bool ShouldProcess(const NodeDef& node) const;
   bool NodeHasFP16KernelForTypeAttr(const NodeDef& node, TypeAttrId taid) const;
-  bool NodeImplicitlyReadsNonResourceVariable(const NodeDef& node) const;
+  bool IsIdentityAfterVariable(const NodeDef& node) const;
   void ConvertBatchNormOpsToV2();
   bool SupportsFloat16(const NodeTypeId& node_type) const;
   const NodeDef* GetTailOfChain(const NodeDef& node, const string& op) const;
@@ -975,7 +958,6 @@ class AutoMixedPrecisionImpl {
   GraphDef* graph_;
   string id_;
   MutableGraphView graph_view_;
-  int cuda_version_;
   NodeTypeAttrMap node_type_map_;
   GraphTypeTopologyView graph_type_view_;
   bool force_all_fp16_;
@@ -1030,7 +1012,7 @@ Status AutoMixedPrecisionImpl::PrintDebugLogs(bool preop, size_t timestamp) {
                          strings::StrCat("paintbuckets", suffix, ".txt"));
     f.open(fname.c_str(), std::fstream::out);
     f << "WhiteList:\n";
-    for (auto x : AutoMixedPrecisionLists::WhiteList(cuda_version_)) {
+    for (auto x : AutoMixedPrecisionLists::WhiteList()) {
       f << x << "\n";
     }
     f << "\nBlackList:\n";
@@ -1085,25 +1067,16 @@ std::pair<int, int> GetDeviceGPUArch(
     const DeviceProperties& device_properties) {
   if (device_properties.type() != "GPU") return {0, 0};
   string arch_str = device_properties.environment().at("architecture");
-  std::vector<string> split_arch_str = str_util::Split(arch_str, '.');
-  if (split_arch_str.empty()) {
+  std::vector<int32> arch_pieces;
+  if (!str_util::SplitAndParseAsInts(arch_str, '.', &arch_pieces) ||
+      arch_pieces.empty()) {
     return {0, 0};
   }
-
-  int major, minor;
-  if (!strings::safe_strto32(split_arch_str[0], &major)) {
-    return {0, 0};
+  std::pair<int, int> arch(arch_pieces[0], 0);
+  if (arch_pieces.size() > 1) {
+    arch.second = arch_pieces[1];
   }
-
-  if (split_arch_str.size() > 1) {
-    if (strings::safe_strto32(split_arch_str[1], &minor)) {
-      return {major, minor};
-    } else {
-      return {0, 0};
-    }
-  } else {
-    return {major, 0};
-  }
+  return arch;
 }
 
 bool AutoMixedPrecisionImpl::IsOnSuitableGPUArch(const NodeDef& node) const {
@@ -1175,7 +1148,7 @@ Status AutoMixedPrecisionImpl::Optimize() {
   optimization_level = absl::AsciiStrToUpper(optimization_level);
   force_all_fp16_ = optimization_level == "UNSAFE_FORCE_ALL";
 
-  fp16_whitelist_ = AutoMixedPrecisionLists::WhiteList(cuda_version_);
+  fp16_whitelist_ = AutoMixedPrecisionLists::WhiteList();
   fp16_blacklist_ = AutoMixedPrecisionLists::BlackList();
   fp16_graylist_ = AutoMixedPrecisionLists::GrayList();
   fp16_clearlist_ = AutoMixedPrecisionLists::ClearList();
@@ -1488,11 +1461,10 @@ void AutoMixedPrecisionImpl::PropagateWhiteThroughClear(
                   ShouldProcess(*item.node) && IsFloat32(item) &&
                   SupportsFloat16(item) &&
                   (fp16_clearlist_.count(item.node->op())) &&
-                  // We don't propagate (backwards) through nodes that read
-                  // Variables because it can break the behavior of TensorBoard
-                  // visualization and/or (in the case of Enter nodes) the model
-                  // itself. This is only a problem for non-resource variables.
-                  !NodeImplicitlyReadsNonResourceVariable(*item.node));
+                  // We don't propagate (backwards) through Identity nodes when
+                  // they immediately follow Variable nodes because otherwise it
+                  // breaks TensorBoard visualization.
+                  !IsIdentityAfterVariable(*item.node));
         }),
         DfsTypeCallbacks::PreOrder([&](int idx) {
           clear_prop_set.insert(idx);
@@ -1642,17 +1614,13 @@ void AutoMixedPrecisionImpl::ForceColorMatchBetweenDataStructureOps(
   }
 }
 
-bool AutoMixedPrecisionImpl::NodeImplicitlyReadsNonResourceVariable(
+bool AutoMixedPrecisionImpl::IsIdentityAfterVariable(
     const NodeDef& node) const {
-  if (node.op() == "Identity" || node.op() == "Enter") {
+  if (node.op() == "Identity") {
     GraphView::InputPort node_input(&node, 0);
     MutableGraphView::OutputPort prev_output =
         graph_view_.GetRegularFanin(node_input);
-    const NodeDef* input = prev_output.node;
-    if (input && ((node.op() == "Identity" && (input->op() == "Variable" ||
-                                               input->op() == "VariableV2")) ||
-                  (node.op() == "Enter" &&
-                   NodeImplicitlyReadsNonResourceVariable(*input)))) {
+    if (prev_output.node && IsVariable(*prev_output.node)) {
       return true;
     }
   }
@@ -1758,7 +1726,7 @@ Status AutoMixedPrecisionImpl::ChangeTypeAttrsAndAddCasts(
               added_cast_node = graph_view_.AddNode(
                   BuildCastNode(src, to_fp16, src.node->device()));
               if (to_fp16 && !IsConstant(*node) && !IsVariable(*node) &&
-                  !NodeImplicitlyReadsNonResourceVariable(*node)) {
+                  !IsIdentityAfterVariable(*node)) {
                 ++num_nonvar_casts_to_fp16;
               }
             }

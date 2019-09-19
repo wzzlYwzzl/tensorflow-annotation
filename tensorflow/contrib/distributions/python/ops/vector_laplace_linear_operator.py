@@ -207,7 +207,7 @@ class VectorLaplaceLinearOperator(
     if not scale.dtype.is_floating:
       raise TypeError("`scale` parameter must have floating-point dtype.")
 
-    with ops.name_scope(name, values=[loc]):
+    with ops.name_scope(name, values=[loc] + scale.graph_parents):
       # Since expand_dims doesn't preserve constant-ness, we obtain the
       # non-dynamic value if possible.
       loc = ops.convert_to_tensor(loc, name="loc") if loc is not None else loc

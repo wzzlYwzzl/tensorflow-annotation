@@ -79,11 +79,6 @@ if tf.__version__.startswith('1'):
       'tf.contrib.autograph': ['utils', 'operators'],
       'tf.test': ['mock'],
       'tf.contrib.estimator': ['python'],
-      'tf': ['python', 'core', 'compiler', 'examples', 'tools'],
-      # There's some aliasing between the compats and v1/2s, so it's easier to
-      # block by name and location than by deleting, or hiding objects.
-      'tf.compat.v1.compat': ['v1', 'v2'],
-      'tf.compat.v2.compat': ['v1', 'v2']
   }
 
   DO_NOT_DESCEND_MAP = {
@@ -128,16 +123,10 @@ if tf.__version__.startswith('1'):
       'tf.contrib.util': ['loader'],
   }
 else:
-  PRIVATE_MAP = {
-      'tf': ['python', 'core', 'compiler', 'examples', 'tools'],
-      # There's some aliasing between the compats and v1/2s, so it's easier to
-      # block by name and location than by deleting, or hiding objects.
-      'tf.compat.v1.compat': ['v1', 'v2'],
-      'tf.compat.v2.compat': ['v1', 'v2']
-  }
+  PRIVATE_MAP = {}
   DO_NOT_DESCEND_MAP = {}
   tf.__doc__ = """
-    ## TensorFlow 2.0 RC
+    ## TensorFlow 2.0 Beta
 
     Caution:  This is a developer preview.  You will likely find some bugs,
     performance issues, and more, and we encourage you to tell us about them.
@@ -149,7 +138,7 @@ else:
     with:
 
     ```
-    pip install tensorflow==2.0.0-rc0
+    pip install tensorflow==2.0.0-beta1
     ```
     """
 
@@ -245,11 +234,11 @@ def build_docs(output_dir, code_url_prefix, search_hints=True):
   except AttributeError:
     pass
 
-  base_dir = path.normpath(path.join(tf.__file__, "../.."))
+  base_dir = path.dirname(tf.__file__)
 
   base_dirs = (
-      path.join(base_dir, "tensorflow_core"),
-      # External packages base directories
+      base_dir,
+      # External packages base directories,
       path.dirname(tensorboard.__file__),
       path.dirname(tensorflow_estimator.__file__),
   )
@@ -261,13 +250,8 @@ def build_docs(output_dir, code_url_prefix, search_hints=True):
       "https://github.com/tensorflow/estimator/tree/master/tensorflow_estimator",
   )
 
-  if LooseVersion(tf.__version__) < LooseVersion('2'):
-    root_title = 'TensorFlow'
-  elif LooseVersion(tf.__version__) >= LooseVersion('2'):
-    root_title = 'TensorFlow 2.0'
-
   doc_generator = generate_lib.DocGenerator(
-      root_title=root_title,
+      root_title="TensorFlow 2.0 Preview",
       py_modules=[("tf", tf)],
       base_dir=base_dirs,
       search_hints=search_hints,

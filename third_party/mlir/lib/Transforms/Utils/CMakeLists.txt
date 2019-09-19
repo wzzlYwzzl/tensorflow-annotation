@@ -1,7 +1,6 @@
 add_llvm_library(MLIRTransformUtils
   FoldUtils.cpp
   GreedyPatternRewriteDriver.cpp
-  InliningUtils.cpp
   LoopFusionUtils.cpp
   LoopUtils.cpp
   RegionUtils.cpp

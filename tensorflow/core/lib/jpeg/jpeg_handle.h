@@ -33,7 +33,7 @@ typedef struct {
   JOCTET *buffer;
   int bufsize;
   int datacount;
-  tstring *dest;
+  string *dest;
 } MemDestMgr;
 
 typedef struct {
@@ -52,7 +52,7 @@ void SetDest(j_compress_ptr cinfo, void *buffer, int bufsize);
 // Same as above, except that buffer is only used as a temporary structure and
 // is emptied into "destination" as soon as it fills up.
 void SetDest(j_compress_ptr cinfo, void *buffer, int bufsize,
-             tstring *destination);
+             string *destination);
 
 }  // namespace jpeg
 }  // namespace tensorflow

@@ -150,7 +150,8 @@ LogicalResult CSE::simplifyOperation(ScopedMapTy &knownValues, Operation *op) {
   if (auto *existing = knownValues.lookup(op)) {
     // If we find one then replace all uses of the current operation with the
     // existing one and mark it for deletion.
-    op->replaceAllUsesWith(existing);
+    for (unsigned i = 0, e = existing->getNumResults(); i != e; ++i)
+      op->getResult(i)->replaceAllUsesWith(existing->getResult(i));
     opsToErase.push_back(op);
 
     // If the existing operation has an unknown location and the current
@@ -213,7 +214,7 @@ void CSE::simplifyRegion(ScopedMapTy &knownValues, DominanceInfo &domInfo,
   std::deque<std::unique_ptr<CFGStackNode>> stack;
 
   // Process the nodes of the dom tree for this region.
-  stack.emplace_back(std::make_unique<CFGStackNode>(
+  stack.emplace_back(llvm::make_unique<CFGStackNode>(
       knownValues, domInfo.getRootNode(&region)));
 
   while (!stack.empty()) {
@@ -229,7 +230,7 @@ void CSE::simplifyRegion(ScopedMapTy &knownValues, DominanceInfo &domInfo,
     if (currentNode->childIterator != currentNode->node->end()) {
       auto *childNode = *(currentNode->childIterator++);
       stack.emplace_back(
-          std::make_unique<CFGStackNode>(knownValues, childNode));
+          llvm::make_unique<CFGStackNode>(knownValues, childNode));
     } else {
       // Finally, if the node and all of its children have been processed
       // then we delete the node.
@@ -258,9 +259,7 @@ void CSE::runOnFunction() {
   markAnalysesPreserved<DominanceInfo, PostDominanceInfo>();
 }
 
-std::unique_ptr<OpPassBase<FuncOp>> mlir::createCSEPass() {
-  return std::make_unique<CSE>();
-}
+FunctionPassBase *mlir::createCSEPass() { return new CSE(); }
 
 static PassRegistration<CSE>
     pass("cse", "Eliminate common sub-expressions in functions");

@@ -27,7 +27,7 @@
 namespace mlir {
 namespace spirv {
 
-std::unique_ptr<OpPassBase<mlir::ModuleOp>> createConvertStandardToSPIRVPass();
+ModulePassBase *createConvertStandardToSPIRVPass();
 
 } // namespace spirv
 } // namespace mlir

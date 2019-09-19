@@ -140,7 +140,7 @@ def model_iteration(model,
     if steps_per_epoch is None:
       reset_dataset_after_each_epoch = True
       steps_per_epoch = training_utils.infer_steps_for_dataset(
-          model, inputs, steps_per_epoch, epochs=epochs, steps_name=steps_name)
+          inputs, steps_per_epoch, epochs=epochs, steps_name=steps_name)
     input_iterator = _get_iterator(inputs, model._distribution_strategy)
 
   # Enter tf.distribute.Strategy scope.
@@ -198,7 +198,6 @@ def model_iteration(model,
       # that determines the number of steps required. To avoid this issue,
       # set validation_steps here if validation_steps is None.
       validation_steps = training_utils.infer_steps_for_dataset(
-          model,
           val_inputs,
           validation_steps,
           epochs=epochs,
@@ -229,8 +228,7 @@ def model_iteration(model,
       verbose=0,  # Handle ProgBarLogger separately in this loop.
       mode=mode)
   # TODO(omalleyt): Handle ProgBar as part of Callbacks once hooks are ready.
-  progbar = training_utils.get_progbar(
-      model, count_mode, mode != ModeKeys.PREDICT)
+  progbar = training_utils.get_progbar(model, count_mode)
   progbar.params = callbacks.params
   progbar.params['verbose'] = verbose
 
@@ -269,10 +267,7 @@ def model_iteration(model,
 
     # Setup work for each epoch
     epoch_logs = {}
-    if mode != ModeKeys.PREDICT:
-      # Collecting and resetting metrics has non-zero cost and will needlessly
-      # slow down model.predict.
-      model.reset_metrics()
+    model.reset_metrics()
     if mode == ModeKeys.TRAIN:
       callbacks.on_epoch_begin(epoch, epoch_logs)
     progbar.on_epoch_begin(epoch, epoch_logs)
@@ -458,7 +453,6 @@ def model_iteration(model,
     if reset_dataset_after_each_epoch and epoch < epochs - 1:
       _reinitialize_iterator(input_iterator, model._distribution_strategy)
 
-  model._successful_loop_finish = True
   callbacks._call_end_hook(mode)
 
   if model._distribution_strategy:

@@ -124,17 +124,20 @@ class TPUClusterResolver(ClusterResolver):
     resp = urlopen(req)
     return compat.as_bytes(resp.read())
 
-  def _is_local_tpu(self):
+  def _is_google_environment(self):
     return (
         self._tpu == compat.as_bytes('') or
-        self._tpu == compat.as_bytes('local'))
+        self._tpu == compat.as_bytes('local') or
+        self._tpu.startswith(compat.as_bytes('localhost:')) or
+        self._tpu.startswith(compat.as_bytes('/bns')) or
+        self._tpu.startswith(compat.as_bytes('uptc://')))
 
   def _should_resolve(self):
     if isinstance(self._should_resolve_override, bool):
       return self._should_resolve_override
     else:
       return not (self._tpu.startswith(compat.as_bytes('grpc://')) or
-                  self._is_local_tpu())
+                  self._is_google_environment())
 
   @staticmethod
   def _get_device_dict_and_cores(devices):
@@ -204,11 +207,11 @@ class TPUClusterResolver(ClusterResolver):
 
     Args:
       tpu: A string corresponding to the TPU to use. If the string is an empty
-        string, the string 'local', or a string that begins with 'grpc://',
-        then it is assumed to not correspond with a Cloud TPU and will
-        instead be passed as the session master and no ClusterSpec propagation
-        will be done. In the future, this may also support a list of strings
-        when multiple Cloud TPUs are used.
+        string, the string 'local', or a string that begins with 'grpc://' or
+          '/bns', then it is assumed to not correspond with a Cloud TPU and will
+          instead be passed as the session master and no ClusterSpec propagation
+          will be done. In the future, this may also support a list of strings
+          when multiple Cloud TPUs are used.
       zone: Zone where the TPUs are located. If omitted or empty, we will assume
         that the zone of the TPU is the same as the zone of the GCE VM, which we
         will try to discover from the GCE metadata service.
@@ -270,7 +273,8 @@ class TPUClusterResolver(ClusterResolver):
     self.task_type = job_name
     self.task_id = 0
 
-    if self._is_local_tpu():
+    if self._is_google_environment():
+      self._environment = 'google'
       self.rpc_layer = None
     else:
       self._environment = ''
@@ -451,16 +455,17 @@ class TPUClusterResolver(ClusterResolver):
 
   def _fetch_cloud_tpu_metadata(self):
     """Returns the TPU metadata object from the TPU Get API call."""
+    res = []
     try:
       full_name = 'projects/%s/locations/%s/nodes/%s' % (
           self._project, self._zone, compat.as_text(self._tpu))
       service = self._tpu_service()
       request = service.projects().locations().nodes().get(name=full_name)
-      return request.execute()
-    except Exception as e:
-      raise ValueError("Could not lookup TPU metadata from name '%s'. Please "
-                       "doublecheck the tpu argument in the TPUClusterResolver "
-                       "constructor. Exception: %s" % (self._tpu, e))
+      res = request.execute()
+    except:  # pylint: disable=bare-except
+      pass
+    finally:
+      return res  # pylint: disable=lost-exception
 
   def num_accelerators(self,
                        task_type=None,

@@ -30,7 +30,7 @@ RandomAccessInputStream::~RandomAccessInputStream() {
 }
 
 Status RandomAccessInputStream::ReadNBytes(int64 bytes_to_read,
-                                           tstring* result) {
+                                           string* result) {
   if (bytes_to_read < 0) {
     return errors::InvalidArgument("Cannot read negative number of bytes");
   }

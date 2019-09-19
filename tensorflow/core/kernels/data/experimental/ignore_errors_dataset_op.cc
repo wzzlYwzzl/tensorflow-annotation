@@ -60,9 +60,7 @@ class IgnoreErrorsDatasetOp : public UnaryDatasetOpKernel {
 
     int64 Cardinality() const override { return input_->Cardinality(); }
 
-    Status CheckExternalState() const override {
-      return input_->CheckExternalState();
-    }
+    bool IsStateful() const override { return input_->IsStateful(); }
 
    protected:
     Status AsGraphDefInternal(SerializationContext* ctx,

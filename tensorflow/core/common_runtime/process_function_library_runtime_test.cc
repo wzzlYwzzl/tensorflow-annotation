@@ -14,7 +14,6 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/core/common_runtime/process_function_library_runtime.h"
 
-#include <memory>
 #include <vector>
 
 #include "tensorflow/core/common_runtime/device_factory.h"
@@ -31,15 +30,12 @@ limitations under the License.
 #include "tensorflow/core/lib/core/threadpool.h"
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/platform/test.h"
-#include "tensorflow/core/protobuf/config.pb.h"
 #include "tensorflow/core/public/session_options.h"
 #include "tensorflow/core/public/version.h"
 
-#if GOOGLE_CUDA
+#ifdef GOOGLE_CUDA
 #include "third_party/gpus/cuda/include/cuda.h"
 #include "third_party/gpus/cuda/include/cuda_runtime_api.h"
-#elif TENSORFLOW_USE_ROCM
-#include "rocm/include/hip/hip_runtime.h"
 #endif  // GOOGLE_CUDA
 
 namespace tensorflow {
@@ -75,13 +71,6 @@ class TestClusterFLR : public DistributedFunctionLibraryRuntime {
   DeviceMgr* device_mgr_;
 };
 
-SessionMetadata GenerateSessionMetadata() {
-  SessionMetadata session_metadata;
-  session_metadata.set_name("name");
-  session_metadata.set_version(42);
-  return session_metadata;
-}
-
 // TODO(b/128707168): Tests requiring a GPU device are currently always skipped
 // because the check for whether a GPU device is present happens before the GPU
 // device is set up.
@@ -94,7 +83,7 @@ class ProcessFunctionLibraryRuntimeTest : public ::testing::Test {
     std::vector<std::unique_ptr<Device>> devices;
     TF_CHECK_OK(DeviceFactory::AddDevices(options, "/job:a/replica:0/task:0",
                                           &devices));
-    device_mgr_ = absl::make_unique<StaticDeviceMgr>(std::move(devices));
+    device_mgr_.reset(new DeviceMgr(std::move(devices)));
     TF_CHECK_OK(device_mgr_->LookupDevice(
         "/job:a/replica:0/task:0/device:CPU:0", &device0_));
     TF_CHECK_OK(device_mgr_->LookupDevice(
@@ -113,8 +102,7 @@ class ProcessFunctionLibraryRuntimeTest : public ::testing::Test {
     }
   }
 
-  void Init(const std::vector<FunctionDef>& flib,
-            const SessionMetadata* session_metadata = nullptr) {
+  void Init(const std::vector<FunctionDef>& flib) {
     FunctionDefLibrary proto;
     for (const auto& fdef : flib) *(proto.add_function()) = fdef;
     lib_def_.reset(new FunctionLibraryDefinition(OpRegistry::Global(), proto));
@@ -122,7 +110,7 @@ class ProcessFunctionLibraryRuntimeTest : public ::testing::Test {
     cluster_flr_.reset(new TestClusterFLR(device_mgr_.get()));
     proc_flr_.reset(new ProcessFunctionLibraryRuntime(
         device_mgr_.get(), Env::Default(), TF_GRAPH_DEF_VERSION, lib_def_.get(),
-        opts, nullptr, cluster_flr_.get(), nullptr, session_metadata));
+        opts, nullptr, cluster_flr_.get()));
     rendezvous_ = new IntraProcessRendezvous(device_mgr_.get());
   }
 
@@ -134,7 +122,7 @@ class ProcessFunctionLibraryRuntimeTest : public ::testing::Test {
   }
 
   Tensor GPUToCPU(const Tensor& device_tensor) {
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#ifdef GOOGLE_CUDA
     CHECK(gpu_device_);
     CHECK(gpu_device_->tensorflow_gpu_device_info() != nullptr);
     DeviceContext* device_context =
@@ -158,7 +146,7 @@ class ProcessFunctionLibraryRuntimeTest : public ::testing::Test {
   }
 
   Tensor CPUToGPU(const Tensor& cpu_tensor) {
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#ifdef GOOGLE_CUDA
     CHECK(gpu_device_);
     CHECK(gpu_device_->tensorflow_gpu_device_info() != nullptr);
     DeviceContext* device_context =
@@ -182,14 +170,13 @@ class ProcessFunctionLibraryRuntimeTest : public ::testing::Test {
 #endif  // GOOGLE_CUDA
   }
 
-  Status RunWithRuntime(
-      const string& name, FunctionLibraryRuntime::Options opts,
-      test::function::Attrs attrs,
-      const FunctionLibraryRuntime::InstantiateOptions& instantiate_opts,
-      const std::vector<Tensor>& args, std::vector<Tensor*> rets,
-      ProcessFunctionLibraryRuntime* pflr) {
+  Status Run(const string& name, FunctionLibraryRuntime::Options opts,
+             test::function::Attrs attrs,
+             const FunctionLibraryRuntime::InstantiateOptions& instantiate_opts,
+             const std::vector<Tensor>& args, std::vector<Tensor*> rets) {
     FunctionLibraryRuntime::Handle handle;
-    Status status = pflr->Instantiate(name, attrs, instantiate_opts, &handle);
+    Status status =
+        proc_flr_->Instantiate(name, attrs, instantiate_opts, &handle);
     if (!status.ok()) {
       return status;
     }
@@ -204,7 +191,7 @@ class ProcessFunctionLibraryRuntimeTest : public ::testing::Test {
     Notification done;
     opts.runner = &runner;
     std::vector<Tensor> out;
-    pflr->Run(opts, handle, args, &out, [&status, &done](const Status& s) {
+    proc_flr_->Run(opts, handle, args, &out, [&status, &done](const Status& s) {
       status = s;
       done.Notify();
     });
@@ -221,28 +208,21 @@ class ProcessFunctionLibraryRuntimeTest : public ::testing::Test {
 
     // Release the handle and then try running the function. It shouldn't
     // succeed.
-    status = pflr->ReleaseHandle(handle);
+    status = proc_flr_->ReleaseHandle(handle);
     if (!status.ok()) {
       return status;
     }
     Notification done2;
-    pflr->Run(opts, handle, args, &out, [&status, &done2](const Status& s) {
-      status = s;
-      done2.Notify();
-    });
+    proc_flr_->Run(opts, handle, args, &out,
+                   [&status, &done2](const Status& s) {
+                     status = s;
+                     done2.Notify();
+                   });
     done2.WaitForNotification();
     EXPECT_TRUE(errors::IsNotFound(status)) << "Actual status: " << status;
     EXPECT_TRUE(absl::StrContains(status.error_message(), "not found."));
 
     return Status::OK();
-  }
-
-  Status Run(const string& name, FunctionLibraryRuntime::Options opts,
-             test::function::Attrs attrs,
-             const FunctionLibraryRuntime::InstantiateOptions& instantiate_opts,
-             const std::vector<Tensor>& args, std::vector<Tensor*> rets) {
-    return RunWithRuntime(name, opts, attrs, instantiate_opts, args, rets,
-                          proc_flr_.get());
   }
 
   Status RunInstantiated(FunctionLibraryRuntime::Handle handle,
@@ -358,9 +338,9 @@ TEST_F(ProcessFunctionLibraryRuntimeTest, SingleCallFindDevice) {
   instantiate_opts.target = "/job:a/replica:0/task:0/cpu:0";
   Tensor y;
   TF_CHECK_OK(Run("FindDevice", opts, {}, instantiate_opts, {}, {&y}));
-  test::ExpectTensorEqual<tstring>(
-      y, test::AsTensor<tstring>({"/job:a/replica:0/task:0/device:CPU:0"},
-                                 TensorShape({})));
+  test::ExpectTensorEqual<string>(
+      y, test::AsTensor<string>({"/job:a/replica:0/task:0/device:CPU:0"},
+                                TensorShape({})));
 }
 
 TEST_F(ProcessFunctionLibraryRuntimeTest, MultipleCallsSameDeviceXTimes) {
@@ -391,13 +371,13 @@ TEST_F(ProcessFunctionLibraryRuntimeTest, MultipleCallsSameDeviceFindDevice) {
   instantiate_opts.target = "/job:a/replica:0/task:0/cpu:1";
   Tensor y;
   TF_CHECK_OK(Run("FindDevice", opts, {}, instantiate_opts, {}, {&y}));
-  test::ExpectTensorEqual<tstring>(
-      y, test::AsTensor<tstring>({"/job:a/replica:0/task:0/device:CPU:1"},
-                                 TensorShape({})));
+  test::ExpectTensorEqual<string>(
+      y, test::AsTensor<string>({"/job:a/replica:0/task:0/device:CPU:1"},
+                                TensorShape({})));
   TF_CHECK_OK(Run("FindDevice", opts, {}, instantiate_opts, {}, {&y}));
-  test::ExpectTensorEqual<tstring>(
-      y, test::AsTensor<tstring>({"/job:a/replica:0/task:0/device:CPU:1"},
-                                 TensorShape({})));
+  test::ExpectTensorEqual<string>(
+      y, test::AsTensor<string>({"/job:a/replica:0/task:0/device:CPU:1"},
+                                TensorShape({})));
 }
 
 TEST_F(ProcessFunctionLibraryRuntimeTest, MultipleCallsDiffDeviceFindDevice) {
@@ -410,15 +390,15 @@ TEST_F(ProcessFunctionLibraryRuntimeTest, MultipleCallsDiffDeviceFindDevice) {
   FunctionLibraryRuntime::InstantiateOptions instantiate_opts_0;
   instantiate_opts_0.target = "/job:a/replica:0/task:0/device:CPU:0";
   TF_CHECK_OK(Run("FindDevice", opts, {}, instantiate_opts_0, {}, {&y}));
-  test::ExpectTensorEqual<tstring>(
-      y, test::AsTensor<tstring>({"/job:a/replica:0/task:0/device:CPU:0"},
-                                 TensorShape({})));
+  test::ExpectTensorEqual<string>(
+      y, test::AsTensor<string>({"/job:a/replica:0/task:0/device:CPU:0"},
+                                TensorShape({})));
   FunctionLibraryRuntime::InstantiateOptions instantiate_opts_1;
   instantiate_opts_1.target = "/job:a/replica:0/task:0/device:CPU:1";
   TF_CHECK_OK(Run("FindDevice", opts, {}, instantiate_opts_1, {}, {&y}));
-  test::ExpectTensorEqual<tstring>(
-      y, test::AsTensor<tstring>({"/job:a/replica:0/task:0/device:CPU:1"},
-                                 TensorShape({})));
+  test::ExpectTensorEqual<string>(
+      y, test::AsTensor<string>({"/job:a/replica:0/task:0/device:CPU:1"},
+                                TensorShape({})));
 }
 
 TEST_F(ProcessFunctionLibraryRuntimeTest, ClusterFLRSerialTest) {
@@ -481,12 +461,6 @@ bool IsCUDATensor(const Tensor& t) {
   if (err == cudaErrorInvalidValue) return false;
   CHECK_EQ(cudaSuccess, err) << cudaGetErrorString(err);
   return (attributes.memoryType == cudaMemoryTypeDevice);
-#elif TENSORFLOW_USE_ROCM
-  hipPointerAttribute_t attributes;
-  hipError_t err = hipPointerGetAttributes(&attributes, t.tensor_data().data());
-  if (err == hipErrorInvalidValue) return false;
-  CHECK_EQ(hipSuccess, err) << hipGetErrorString(err);
-  return (attributes.memoryType == hipMemoryTypeDevice);
 #else
   CHECK(false)
       << "IsCUDATensor should not be called when CUDA is not available";
@@ -928,109 +902,6 @@ TEST_F(ProcessFunctionLibraryRuntimeTest, MultiDevice_StateHandle) {
     }
     TF_CHECK_OK(proc_flr_->ReleaseHandle(other_handle));
   }
-}
-
-REGISTER_OP("SessionMetadataReader")
-    .Input("x: int64")
-    .Output("y: string")
-    .SetIsStateful()
-    .Doc(R"doc(SessionMetadataReader returns the session metadata.
-
-x: int64
-y: string
-)doc");
-
-class SessionMetadataReaderOp : public OpKernel {
- public:
-  explicit SessionMetadataReaderOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
-  void Compute(OpKernelContext* ctx) override {
-    Tensor* out_tensor = nullptr;
-    OP_REQUIRES_OK(ctx,
-                   ctx->allocate_output("y", TensorShape({}), &out_tensor));
-    if (ctx->session_metadata() != nullptr) {
-      out_tensor->scalar<tstring>()() = ctx->session_metadata()->DebugString();
-    } else {
-      out_tensor->scalar<tstring>()() = "";
-    }
-  }
-};
-REGISTER_KERNEL_BUILDER(Name("SessionMetadataReader").Device(DEVICE_CPU),
-                        SessionMetadataReaderOp);
-
-FunctionDef SessionMetadataReaderOpFn() {
-  return FunctionDefHelper::Define(
-      // Name
-      "SessionMetadataReaderFn",
-      // Args
-      {"x: int64"},
-      // Return values
-      {"y: string"},
-      // Attr def
-      {},
-      // Nodes
-      {{{"y"}, "SessionMetadataReader", {"x"}, {}}});
-}
-
-TEST_F(ProcessFunctionLibraryRuntimeTest, SessionMetadataAbsent) {
-  Init({SessionMetadataReaderOpFn()}, /*session_metadata=*/nullptr);
-  FunctionLibraryRuntime::Options opts;
-  opts.source_device = "/job:a/replica:0/task:0/cpu:0";
-  opts.rendezvous = rendezvous_;
-  opts.remote_execution = true;
-  FunctionLibraryRuntime::InstantiateOptions instantiate_opts;
-  instantiate_opts.target = "/job:a/replica:0/task:0/cpu:0";
-  const auto x = test::AsTensor<int64>({17});
-  Tensor y;
-  TF_CHECK_OK(
-      Run("SessionMetadataReaderFn", opts, {}, instantiate_opts, {x}, {&y}));
-  EXPECT_EQ("", y.scalar<tstring>()());
-}
-
-TEST_F(ProcessFunctionLibraryRuntimeTest, SessionMetadataPresent) {
-  const SessionMetadata session_metadata = GenerateSessionMetadata();
-  Init({SessionMetadataReaderOpFn()}, &session_metadata);
-  FunctionLibraryRuntime::Options opts;
-  opts.source_device = "/job:a/replica:0/task:0/cpu:0";
-  opts.rendezvous = rendezvous_;
-  opts.remote_execution = true;
-  FunctionLibraryRuntime::InstantiateOptions instantiate_opts;
-  instantiate_opts.target = "/job:a/replica:0/task:0/cpu:0";
-  const auto x = test::AsTensor<int64>({17});
-  Tensor y;
-  TF_CHECK_OK(
-      Run("SessionMetadataReaderFn", opts, {}, instantiate_opts, {x}, {&y}));
-  SessionMetadata read_metadata;
-  ASSERT_TRUE(protobuf::TextFormat::ParseFromString(y.scalar<tstring>()(),
-                                                    &read_metadata));
-  EXPECT_EQ(session_metadata.name(), read_metadata.name());
-  EXPECT_EQ(session_metadata.version(), read_metadata.version());
-}
-
-TEST_F(ProcessFunctionLibraryRuntimeTest, SessionMetadataPresentAfterCloning) {
-  const SessionMetadata session_metadata = GenerateSessionMetadata();
-  Init({SessionMetadataReaderOpFn()}, &session_metadata);
-  auto* flr = proc_flr_->GetFLR("/job:a/replica:0/task:0/cpu:0");
-  ASSERT_NE(nullptr, flr);
-  std::unique_ptr<FunctionLibraryDefinition> cloned_lib_def;
-  std::unique_ptr<ProcessFunctionLibraryRuntime> cloned_proc_flr;
-  FunctionLibraryRuntime* cloned_flr;
-  TF_ASSERT_OK(flr->Clone(&cloned_lib_def, &cloned_proc_flr, &cloned_flr));
-  FunctionLibraryRuntime::Options opts;
-  opts.source_device = "/job:a/replica:0/task:0/cpu:0";
-  opts.rendezvous = rendezvous_;
-  opts.remote_execution = true;
-  FunctionLibraryRuntime::InstantiateOptions instantiate_opts;
-  instantiate_opts.target = "/job:a/replica:0/task:0/cpu:0";
-  const auto x = test::AsTensor<int64>({17});
-  Tensor y;
-  TF_CHECK_OK(RunWithRuntime("SessionMetadataReaderFn", opts, {},
-                             instantiate_opts, {x}, {&y},
-                             cloned_proc_flr.get()));
-  SessionMetadata read_metadata;
-  ASSERT_TRUE(protobuf::TextFormat::ParseFromString(y.scalar<tstring>()(),
-                                                    &read_metadata));
-  EXPECT_EQ(session_metadata.name(), read_metadata.name());
-  EXPECT_EQ(session_metadata.version(), read_metadata.version());
 }
 
 }  // anonymous namespace

@@ -88,9 +88,9 @@ class SetStatsAggregatorDatasetOp : public UnaryDatasetOpKernel {
     core::RefCountPtr<StatsAggregatorResource> resource;
     OP_REQUIRES_OK(ctx,
                    LookupResource(ctx, HandleFromInput(ctx, 1), &resource));
-    tstring tag;
+    string tag;
     OP_REQUIRES_OK(ctx, ParseScalarArgument(ctx, "tag", &tag));
-    tstring prefix;
+    string prefix;
     OP_REQUIRES_OK(ctx, ParseScalarArgument(ctx, "counter_prefix", &prefix));
 
     *output =
@@ -138,9 +138,7 @@ class SetStatsAggregatorDatasetOp : public UnaryDatasetOpKernel {
 
     int64 Cardinality() const override { return input_->Cardinality(); }
 
-    Status CheckExternalState() const override {
-      return input_->CheckExternalState();
-    }
+    bool IsStateful() const override { return input_->IsStateful(); }
 
    protected:
     Status AsGraphDefInternal(SerializationContext* ctx,
@@ -211,8 +209,8 @@ class SetStatsAggregatorDatasetOp : public UnaryDatasetOpKernel {
     const DatasetBase* const input_;
     const Tensor resource_handle_;
     StatsAggregatorResource* stats_aggregator_resource_;
-    tstring tag_;
-    tstring prefix_;
+    string tag_;
+    string prefix_;
   };
 };
 

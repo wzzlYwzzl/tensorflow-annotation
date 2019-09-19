@@ -93,13 +93,11 @@ def LogOfSoftmax : Pat<(TF_LogOp (TF_SoftmaxOp $arg)), (TF_LogSoftmaxOp $arg)>;
 def LogicalNotNested : Pat<(TF_LogicalNotOp (TF_LogicalNotOp $arg)),
                            (replaceWithValue $arg)>;
 
-def LogicalNotOfEqual : Pat<
-    (TF_LogicalNotOp (TF_EqualOp $arg0, $arg1, $shape_error)),
-    (TF_NotEqualOp $arg0, $arg1, $shape_error)>;
+def LogicalNotOfEqual : Pat<(TF_LogicalNotOp (TF_EqualOp $arg0, $arg1)),
+                            (TF_NotEqualOp $arg0, $arg1)>;
 
-def LogicalNotOfNotEqual : Pat<
-    (TF_LogicalNotOp (TF_NotEqualOp $arg0, $arg1, $shape_error)),
-    (TF_EqualOp $arg0, $arg1, $shape_error)>;
+def LogicalNotOfNotEqual : Pat<(TF_LogicalNotOp (TF_NotEqualOp $arg0, $arg1)),
+                               (TF_EqualOp $arg0, $arg1)>;
 
 def LogicalNotOfGreater : Pat<(TF_LogicalNotOp (TF_GreaterOp $arg0, $arg1)),
                               (TF_LessEqualOp $arg0, $arg1)>;

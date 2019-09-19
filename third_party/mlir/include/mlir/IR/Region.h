@@ -67,12 +67,12 @@ public:
     return &Region::blocks;
   }
 
-  /// Return the region containing this region or nullptr if the region is
-  /// attached to a top-level operation.
-  Region *getParentRegion();
+  /// Return the region containing this region or nullptr if it is a top-level
+  /// region.
+  Region *getContainingRegion();
 
   /// Return the parent operation this region is attached to.
-  Operation *getParentOp();
+  Operation *getContainingOp();
 
   /// Find the first parent operation of the given type, or nullptr if there is
   /// no ancestor operation.
@@ -81,7 +81,7 @@ public:
     do {
       if (auto parent = dyn_cast_or_null<ParentT>(region->container))
         return parent;
-    } while ((region = region->getParentRegion()));
+    } while ((region = region->getContainingRegion()));
     return ParentT();
   }
 
@@ -124,27 +124,9 @@ public:
   /// they are to be deleted.
   void dropAllReferences();
 
-  /// Walk the operations in this region in postorder, calling the callback for
-  /// each operation. This method is invoked for void-returning callbacks.
-  /// See Operation::walk for more details.
-  template <typename FnT, typename RetT = detail::walkResultType<FnT>>
-  typename std::enable_if<std::is_same<RetT, void>::value, RetT>::type
-  walk(FnT &&callback) {
-    for (auto &block : *this)
-      block.walk(callback);
-  }
-
-  /// Walk the operations in this region in postorder, calling the callback for
-  /// each operation. This method is invoked for interruptible callbacks.
-  /// See Operation::walk for more details.
-  template <typename FnT, typename RetT = detail::walkResultType<FnT>>
-  typename std::enable_if<std::is_same<RetT, WalkResult>::value, RetT>::type
-  walk(FnT &&callback) {
-    for (auto &block : *this)
-      if (block.walk(callback).wasInterrupted())
-        return WalkResult::interrupt();
-    return WalkResult::advance();
-  }
+  /// Walk the operations in this block in postorder, calling the callback for
+  /// each operation.
+  void walk(llvm::function_ref<void(Operation *)> callback);
 
   /// Displays the CFG in a window. This is for use from the debugger and
   /// depends on Graphviz to generate the graph.

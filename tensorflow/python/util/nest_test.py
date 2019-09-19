@@ -55,15 +55,6 @@ class _CustomMapping(collections_abc.Mapping):
     return len(self._wrapped)
 
 
-class _CustomSequenceThatRaisesException(collections.Sequence):
-
-  def __len__(self):
-    return 1
-
-  def __getitem__(self, item):
-    raise ValueError("Cannot get item: %s" % item)
-
-
 class NestTest(parameterized.TestCase, test.TestCase):
 
   PointXY = collections.namedtuple("Point", ["x", "y"])  # pylint: disable=invalid-name
@@ -465,16 +456,6 @@ class NestTest(parameterized.TestCase, test.TestCase):
     self.assertEqual(3, nest.map_structure(lambda x: x - 1, 4))
 
     self.assertEqual(7, nest.map_structure(lambda x, y: x + y, 3, 4))
-
-    structure3 = collections.defaultdict(list)
-    structure3["a"] = [1, 2, 3, 4]
-    structure3["b"] = [2, 3, 4, 5]
-
-    expected_structure3 = collections.defaultdict(list)
-    expected_structure3["a"] = [2, 3, 4, 5]
-    expected_structure3["b"] = [3, 4, 5, 6]
-    self.assertEqual(expected_structure3,
-                     nest.map_structure(lambda x: x + 1, structure3))
 
     # Empty structures
     self.assertEqual((), nest.map_structure(lambda x: x + 1, ()))
@@ -1217,11 +1198,6 @@ class NestTest(parameterized.TestCase, test.TestCase):
   def testMapWithTuplePathsIncompatibleStructures(self, s1, s2, error_type):
     with self.assertRaises(error_type):
       nest.map_structure_with_tuple_paths(lambda path, *s: 0, s1, s2)
-
-  def testFlattenCustomSequenceThatRaisesException(self):  # b/140746865
-    seq = _CustomSequenceThatRaisesException()
-    with self.assertRaisesRegexp(ValueError, "Cannot get item"):
-      nest.flatten(seq)
 
 
 class NestBenchmark(test.Benchmark):

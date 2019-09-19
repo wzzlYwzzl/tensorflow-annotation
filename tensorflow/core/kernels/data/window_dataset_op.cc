@@ -99,9 +99,7 @@ class WindowDatasetOp::Dataset : public DatasetBase {
     return cardinality;
   }
 
-  Status CheckExternalState() const override {
-    return input_->CheckExternalState();
-  }
+  bool IsStateful() const override { return input_->IsStateful(); }
 
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
@@ -330,7 +328,7 @@ class WindowDatasetOp::Dataset : public DatasetBase {
       error::Code code = static_cast<error::Code>(code_int);
 
       if (code != error::Code::OK) {
-        tstring error_message;
+        string error_message;
         TF_RETURN_IF_ERROR(
             reader->ReadScalar(ErrorMessageKey(index), &error_message));
         *status = Status(code, error_message);

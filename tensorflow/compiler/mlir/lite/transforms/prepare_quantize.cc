@@ -19,8 +19,8 @@ limitations under the License.
 #include "mlir/IR/MLIRContext.h"  // TF:local_config_mlir
 #include "mlir/Pass/Pass.h"  // TF:local_config_mlir
 #include "tensorflow/compiler/mlir/lite/ir/tfl_ops.h"
-#include "tensorflow/compiler/mlir/lite/quantization/quantization_utils.h"
 #include "tensorflow/compiler/mlir/lite/transforms/passes.h"
+#include "tensorflow/compiler/mlir/lite/utils/quantization_utils.h"
 
 //===----------------------------------------------------------------------===//
 // The prepare-quantize Pass.
@@ -60,9 +60,8 @@ void PrepareQuantizePass::runOnFunction() {
 }  // namespace
 
 // Creates an instance of the TensorFlow Lite dialect PrepareQuantize pass.
-std::unique_ptr<OpPassBase<FuncOp>> CreatePrepareQuantizePass(
-    bool quantize_sign) {
-  return std::make_unique<PrepareQuantizePass>(quantize_sign);
+FunctionPassBase *CreatePrepareQuantizePass(bool quantize_sign) {
+  return new PrepareQuantizePass(quantize_sign);
 }
 
 static PassRegistration<PrepareQuantizePass> pass(

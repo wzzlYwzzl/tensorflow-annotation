@@ -303,7 +303,8 @@ cc_library(
     hdrs = ["signature.h"],
     deprecation = "No longer supported. Switch to SavedModel immediately.",
     visibility = ["//visibility:public"],
-    deps = if_not_mobile([
+    deps = [
+    ] + if_not_mobile([
         ":manifest_proto_cc",
         "//tensorflow/core:core_cpu",
         "//tensorflow/core:framework",

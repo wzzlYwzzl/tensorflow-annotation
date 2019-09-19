@@ -73,8 +73,7 @@ Status DecodeThreeChars(const char* codes, char* result) {
 }
 }  // namespace
 
-template <typename T>
-Status Base64Decode(StringPiece data, T* decoded) {
+Status Base64Decode(StringPiece data, string* decoded) {
   if (decoded == nullptr) {
     return errors::Internal("'decoded' cannot be nullptr.");
   }
@@ -136,13 +135,11 @@ Status Base64Decode(StringPiece data, T* decoded) {
   return Status::OK();
 }
 
-template <typename T>
-Status Base64Encode(StringPiece source, T* encoded) {
+Status Base64Encode(StringPiece source, string* encoded) {
   return Base64Encode(source, false, encoded);
 }
 
-template <typename T>
-Status Base64Encode(StringPiece source, bool with_padding, T* encoded) {
+Status Base64Encode(StringPiece source, bool with_padding, string* encoded) {
   const char* const base64_chars = kBase64UrlSafeChars;
   if (encoded == nullptr) {
     return errors::Internal("'encoded' cannot be nullptr.");
@@ -193,17 +190,5 @@ Status Base64Encode(StringPiece source, bool with_padding, T* encoded) {
   encoded->assign(buffer.get(), current - buffer.get());
   return Status::OK();
 }
-
-template Status Base64Decode<string>(StringPiece data, string* decoded);
-template Status Base64Encode<string>(StringPiece source, string* encoded);
-template Status Base64Encode<string>(StringPiece source, bool with_padding,
-                                     string* encoded);
-
-#ifdef USE_TSTRING
-template Status Base64Decode<tstring>(StringPiece data, tstring* decoded);
-template Status Base64Encode<tstring>(StringPiece source, tstring* encoded);
-template Status Base64Encode<tstring>(StringPiece source, bool with_padding,
-                                      tstring* encoded);
-#endif  // USE_TSTRING
 
 }  // namespace tensorflow

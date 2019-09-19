@@ -55,14 +55,7 @@ XlaOp DynamicUpdateSliceInMinorDims(XlaOp x, XlaOp update,
 // [X0,X1,X2,..XN] and dim = i `index` must be an n-dimensional tensor with size
 // [X0,X1,...Y,Xi+1,...,X[N] where y >= 1 and `out` will have the same sizes as
 // `index`.
-XlaOp TorchGather(XlaOp input, XlaOp index, int64 dim, bool sparse = true);
-
-// idx = index[i][j][k]
-// output[idx][j][k] = combiner(input[idx][j][k], src[i][j][k])  # if dim == 0
-// output[i][idx][k] = combiner(input[i][idx][k], src[i][j][k])  # if dim == 1
-// output[i][j][idx] = combiner(input[i][j][idx], src[i][j][k])  # if dim == 2
-XlaOp TorchScatterDense(XlaOp input, XlaOp index, XlaOp src, int64 dim,
-                        const std::function<XlaOp(XlaOp, XlaOp)>& combiner);
+XlaOp TorchGather(XlaOp input, XlaOp index, int64 dim);
 
 // Returns a new tensor which indexes the input tensor along dimension dim using
 // the entries in index.

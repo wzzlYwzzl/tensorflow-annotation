@@ -116,14 +116,8 @@ static Status PlaceShapeType(const std::vector<string>& inputs,
   std::vector<std::pair<string, Tensor>> input_tensors;
   for (size_t i = 0; i < inputs.size(); ++i) {
     const string& name = inputs.at(i);
-    std::vector<string> split_input_shapes =
-        str_util::Split(input_shapes_strs.at(i), ',');
     std::vector<int64> dims;
-    for (const string& dim : split_input_shapes) {
-      int64 tmp;
-      CHECK(strings::safe_strto64(dim, &tmp));
-      dims.push_back(tmp);
-    }
+    CHECK(str_util::SplitAndParseAsInts(input_shapes_strs.at(i), ',', &dims));
     DataType data_type;
     CHECK(DataTypeFromString(input_types_strs.at(i), &data_type))
         << "\"" << input_types_strs.at(i) << "\" was an invalid type";

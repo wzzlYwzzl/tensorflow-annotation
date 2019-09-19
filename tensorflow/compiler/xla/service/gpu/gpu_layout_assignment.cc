@@ -58,12 +58,6 @@ HeuristicLayoutAssignment(const HloInstruction* instr,
       std::make_tuple(DataLayout::kBatchYXDepth, FilterLayout::kOutputYXInput,
                       DataLayout::kBatchYXDepth);
 
-  // Integer convolution must use NHWC.
-  if (primitive_util::IsIntegralType(
-          instr->operand(0)->shape().element_type())) {
-    return kAllNHWC;
-  }
-
   const DebugOptions& debug_options =
       instr->GetModule()->config().debug_options();
 
@@ -172,7 +166,7 @@ Status GpuLayoutAssignment::AddBackendConstraintsToDnnConvCustomCall(
   // instr->operand(2), if exists, is the bias buffer. There is no need to
   // assign layout to it, as it has only one dimension.
 
-  // instr->operand(3), if exists, is the side input buffer.
+  // instr->opernad(3), if exists, is the side input buffer.
   if (instr->operand_count() == 4) {
     if (kind != CudnnConvKind::kForwardActivation) {
       return InternalError(

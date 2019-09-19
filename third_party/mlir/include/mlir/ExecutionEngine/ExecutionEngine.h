@@ -23,8 +23,6 @@
 #define MLIR_EXECUTIONENGINE_EXECUTIONENGINE_H_
 
 #include "mlir/Support/LLVM.h"
-#include "llvm/ExecutionEngine/ObjectCache.h"
-#include "llvm/ExecutionEngine/Orc/LLJIT.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/Error.h"
 
@@ -34,27 +32,15 @@
 namespace llvm {
 template <typename T> class Expected;
 class Module;
-class ExecutionEngine;
-class MemoryBuffer;
 } // namespace llvm
 
 namespace mlir {
 
 class ModuleOp;
 
-/// A simple object cache following Lang's LLJITWithObjectCache example.
-class SimpleObjectCache : public llvm::ObjectCache {
-public:
-  void notifyObjectCompiled(const llvm::Module *M,
-                            llvm::MemoryBufferRef ObjBuffer) override;
-  std::unique_ptr<llvm::MemoryBuffer> getObject(const llvm::Module *M) override;
-
-  /// Dump cached object to output file `filename`.
-  void dumpToObjectFile(llvm::StringRef filename);
-
-private:
-  llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> cachedObjects;
-};
+namespace impl {
+class OrcJIT;
+} // end namespace impl
 
 /// JIT-backed execution engine for MLIR modules.  Assumes the module can be
 /// converted to LLVM IR.  For each function, creates a wrapper function with
@@ -68,20 +54,17 @@ private:
 /// be used to invoke the JIT-compiled function.
 class ExecutionEngine {
 public:
-  ExecutionEngine(bool enableObjectCache);
+  ~ExecutionEngine();
 
   /// Creates an execution engine for the given module.  If `transformer` is
   /// provided, it will be called on the LLVM module during JIT-compilation and
-  /// can be used, e.g., for reporting or optimization. `jitCodeGenOptLevel`,
-  /// when provided, is used as the optimization level for target code
-  /// generation. If `sharedLibPaths` are provided, the underlying
-  /// JIT-compilation will open and link the shared libraries for symbol
-  /// resolution. If `objectCache` is provided, JIT compiler will use it to
-  /// store the object generated for the given module.
-  static llvm::Expected<std::unique_ptr<ExecutionEngine>> create(
-      ModuleOp m, std::function<llvm::Error(llvm::Module *)> transformer = {},
-      Optional<llvm::CodeGenOpt::Level> jitCodeGenOptLevel = llvm::None,
-      ArrayRef<StringRef> sharedLibPaths = {}, bool enableObjectCache = false);
+  /// can be used, e.g., for reporting or optimization.
+  /// If `sharedLibPaths` are provided, the underlying JIT-compilation will open
+  /// and link the shared libraries for symbol resolution.
+  static llvm::Expected<std::unique_ptr<ExecutionEngine>>
+  create(ModuleOp m,
+         std::function<llvm::Error(llvm::Module *)> transformer = {},
+         ArrayRef<StringRef> sharedLibPaths = {});
 
   /// Looks up a packed-argument function with the given name and returns a
   /// pointer to it.  Propagates errors in case of failure.
@@ -102,19 +85,12 @@ public:
   /// the engine.
   static bool setupTargetTriple(llvm::Module *llvmModule);
 
-  /// Dump object code to output file `filename`.
-  void dumpToObjectFile(llvm::StringRef filename);
-
 private:
   // Ordering of llvmContext and jit is important for destruction purposes: the
   // jit must be destroyed before the context.
   llvm::LLVMContext llvmContext;
-
-  // Underlying LLJIT.
-  std::unique_ptr<llvm::orc::LLJIT> jit;
-
-  // Underlying cache.
-  std::unique_ptr<SimpleObjectCache> cache;
+  // Private implementation of the JIT (PIMPL)
+  std::unique_ptr<impl::OrcJIT> jit;
 };
 
 template <typename... Args>

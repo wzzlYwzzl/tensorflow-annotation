@@ -153,11 +153,6 @@ class ParallelInterleaveDatasetOp::Dataset : public DatasetBase {
         ParallelInterleaveDatasetOp::kDatasetType, params);
   }
 
-  Status CheckExternalState() const override {
-    TF_RETURN_IF_ERROR(captured_func_->CheckExternalState());
-    return input_->CheckExternalState();
-  }
-
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
                             DatasetGraphDefBuilder* b,
@@ -704,7 +699,7 @@ class ParallelInterleaveDatasetOp::Dataset : public DatasetBase {
       error::Code code = static_cast<error::Code>(code_int);
 
       if (code != error::Code::OK) {
-        tstring error_message;
+        string error_message;
         TF_RETURN_IF_ERROR(reader->ReadScalar(ErrorMessageKey(key_prefix, idx),
                                               &error_message));
         *status = Status(code, error_message);

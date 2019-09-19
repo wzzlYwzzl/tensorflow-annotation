@@ -26,73 +26,17 @@ class Any;
 } // end namespace llvm
 
 namespace mlir {
-class AnalysisManager;
-class MLIRContext;
+class FunctionPassBase;
 class ModuleOp;
-class OperationName;
-class Operation;
+class ModulePassBase;
 class Pass;
 class PassInstrumentation;
 class PassInstrumentor;
 
 namespace detail {
-struct OpPassManagerImpl;
+class PassExecutor;
+class ModulePassExecutor;
 } // end namespace detail
-
-//===----------------------------------------------------------------------===//
-// OpPassManager
-//===----------------------------------------------------------------------===//
-
-/// This class represents a pass manager that runs passes on a specific
-/// operation type. This class is not constructed directly, but nested within
-/// other OpPassManagers or the top-level PassManager.
-class OpPassManager {
-public:
-  OpPassManager(OpPassManager &&rhs);
-  OpPassManager(const OpPassManager &rhs);
-  ~OpPassManager();
-  OpPassManager &operator=(const OpPassManager &rhs);
-
-  /// Run the held passes over the given operation.
-  LogicalResult run(Operation *op, AnalysisManager am);
-
-  /// Nest a new operation pass manager for the given operation kind under this
-  /// pass manager.
-  OpPassManager &nest(const OperationName &nestedName);
-  OpPassManager &nest(StringRef nestedName);
-  template <typename OpT> OpPassManager &nest() {
-    return nest(OpT::getOperationName());
-  }
-
-  /// Add the given pass to this pass manager. If this pass has a concrete
-  /// operation type, it must be the same type as this pass manager.
-  void addPass(std::unique_ptr<Pass> pass);
-
-  /// Returns the number of passes held by this manager.
-  size_t size() const;
-
-  /// Return an instance of the context.
-  MLIRContext *getContext() const;
-
-  /// Return the operation name that this pass manager operates on.
-  const OperationName &getOpName() const;
-
-  /// Returns the internal implementation instance.
-  detail::OpPassManagerImpl &getImpl();
-
-private:
-  OpPassManager(OperationName name, bool disableThreads, bool verifyPasses);
-
-  /// A pointer to an internal implementation instance.
-  std::unique_ptr<detail::OpPassManagerImpl> impl;
-
-  /// Allow access to the constructor.
-  friend class PassManager;
-};
-
-//===----------------------------------------------------------------------===//
-// PassManager
-//===----------------------------------------------------------------------===//
 
 /// An enum describing the different display modes for the pass timing
 /// information within the pass manager.
@@ -108,10 +52,10 @@ enum class PassTimingDisplayMode {
 };
 
 /// The main pass manager and pipeline builder.
-class PassManager : public OpPassManager {
+class PassManager {
 public:
   // If verifyPasses is true, the verifier is run after each pass.
-  PassManager(MLIRContext *ctx, bool verifyPasses = true);
+  PassManager(bool verifyPasses = true);
   ~PassManager();
 
   /// Run the passes within this manager on the provided module.
@@ -122,11 +66,29 @@ public:
   void disableMultithreading(bool disable = true);
 
   //===--------------------------------------------------------------------===//
+  // Pipeline Building
+  //===--------------------------------------------------------------------===//
+
+  /// Add an opaque pass pointer to the current manager. This takes ownership
+  /// over the provided pass pointer.
+  void addPass(Pass *pass);
+
+  /// Add a module pass to the current manager. This takes ownership over the
+  /// provided pass pointer.
+  void addPass(ModulePassBase *pass);
+
+  /// Add a function pass to the current manager. This takes ownership over the
+  /// provided pass pointer. This will automatically create a function pass
+  /// executor if necessary.
+  void addPass(FunctionPassBase *pass);
+
+  //===--------------------------------------------------------------------===//
   // Instrumentations
   //===--------------------------------------------------------------------===//
 
-  /// Add the provided instrumentation to the pass manager.
-  void addInstrumentation(std::unique_ptr<PassInstrumentation> pi);
+  /// Add the provided instrumentation to the pass manager. This takes ownership
+  /// over the given pointer.
+  void addInstrumentation(PassInstrumentation *pi);
 
   /// Add an instrumentation to print the IR before and after pass execution.
   /// * 'shouldPrintBeforePass' and 'shouldPrintAfterPass' correspond to filter
@@ -148,8 +110,20 @@ public:
       PassTimingDisplayMode displayMode = PassTimingDisplayMode::Pipeline);
 
 private:
+  /// A stack of nested pass executors on sub-module IR units, e.g. function.
+  llvm::SmallVector<detail::PassExecutor *, 1> nestedExecutorStack;
+
+  /// The top level module pass executor.
+  std::unique_ptr<detail::ModulePassExecutor> mpe;
+
+  /// Flag that specifies if the IR should be verified after each pass has run.
+  bool verifyPasses : 1;
+
   /// Flag that specifies if pass timing is enabled.
   bool passTiming : 1;
+
+  /// Flag that specifies if multi-threading is disabled.
+  bool disableThreads : 1;
 
   /// A manager for pass instrumentations.
   std::unique_ptr<PassInstrumentor> instrumentor;

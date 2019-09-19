@@ -116,7 +116,7 @@ REGISTER_KERNEL_BUILDER(Name("InTopKV2")
                             .TypeConstraint<int64>("T"),
                         InTopK<CPUDevice, float, int64>);
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 // Forward declarations of the functor specializations for GPU.
 namespace functor {
@@ -142,6 +142,6 @@ REGISTER_KERNEL_BUILDER(
     Name("InTopKV2").Device(DEVICE_GPU).TypeConstraint<int64>("T"),
     InTopK<GPUDevice, float, int64>);
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 }  // namespace tensorflow

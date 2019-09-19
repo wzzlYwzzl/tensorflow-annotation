@@ -242,11 +242,13 @@ class ChooseFastestBranchDatasetOp : public UnaryDatasetOpKernel {
       return static_cast<double>(n) * ratio_numerator_ / ratio_denominator_;
     }
 
-    Status CheckExternalState() const override {
+    bool IsStateful() const override {
       for (const auto& captured_func : captured_funcs_) {
-        TF_RETURN_IF_ERROR(captured_func->CheckExternalState());
+        if (captured_func->IsStateful()) {
+          return true;
+        }
       }
-      return input_->CheckExternalState();
+      return input_->IsStateful();
     }
 
    protected:

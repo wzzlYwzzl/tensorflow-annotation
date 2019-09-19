@@ -13,8 +13,3 @@ py_binary(
     srcs = ["def_file_filter.py"],
     srcs_version = "PY2AND3",
 )
-
-filegroup(
-    name = "symbols_pybind",
-    srcs = ["symbols_pybind.txt"],
-)

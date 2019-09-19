@@ -35,12 +35,12 @@ Location Value::getLoc() {
 }
 
 /// Return the Region in which this Value is defined.
-Region *Value::getParentRegion() {
+Region *Value::getContainingRegion() {
   switch (getKind()) {
   case Value::Kind::BlockArgument:
     return cast<BlockArgument>(this)->getOwner()->getParent();
   case Value::Kind::OpResult:
-    return getDefiningOp()->getParentRegion();
+    return getDefiningOp()->getContainingRegion();
   }
   llvm_unreachable("Unknown Value Kind");
 }

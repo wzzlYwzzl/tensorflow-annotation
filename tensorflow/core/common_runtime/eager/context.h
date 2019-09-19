@@ -107,16 +107,6 @@ class RunMetadataListener {
 
 class EagerContext : public core::RefCounted {
  public:
-  static const uint64 kInvalidContextId = 0;
-
-  static uint64 NewContextId() {
-    uint64 context_id = random::New64();
-    while (context_id == kInvalidContextId) {
-      context_id = random::New64();
-    }
-    return context_id;
-  }
-
   EagerContext(const SessionOptions& opts,
                ContextDevicePlacementPolicy default_device_placement_policy,
                ContextMirroringPolicy default_mirroring_policy, bool async,
@@ -138,6 +128,9 @@ class EagerContext : public core::RefCounted {
 
   // Specify a executor for this thread.
   void SetExecutorForThread(EagerExecutor* executor);
+
+  // Clear the executor for this thread.
+  void ClearExecutorForThread();
 
   // TODO(apassos) make this return a constant reference
   gtl::FlatMap<string, Device*, StringPieceHasher>* device_map() {
@@ -183,10 +176,9 @@ class EagerContext : public core::RefCounted {
 
   GraphCollector* GetGraphCollector() { return &graph_collector_; }
 
-  EagerExecutor& Executor();
+  EagerExecutor* Executor();
 
-  Status AddFunctionDef(const FunctionDef& fdef,
-                        const bool add_to_local_only = false);
+  Status AddFunctionDef(const FunctionDef& fdef);
 
   Status RemoveFunction(const string& func);
 
@@ -234,7 +226,7 @@ class EagerContext : public core::RefCounted {
     return (local_device_manager_ != nullptr) ? local_device_manager_.get()
                                               : local_unowned_device_manager_;
   }
-  const tensorflow::DynamicDeviceMgr* remote_device_mgr() const {
+  const tensorflow::DeviceMgr* remote_device_mgr() const {
     return (remote_device_manager_ != nullptr) ? remote_device_manager_.get()
                                                : remote_unowned_device_manager_;
   }
@@ -244,10 +236,16 @@ class EagerContext : public core::RefCounted {
 
   // TODO(apassos) clean up RunMetadata storage.
   mutex* MetadataMu() LOCK_RETURNED(metadata_mu_) { return &metadata_mu_; }
+  bool ShouldStoreStepStats() LOCKS_EXCLUDED(metadata_mu_);
+  void SetShouldStoreStepStats(bool value);
   bool ShouldStoreGraphs() LOCKS_EXCLUDED(metadata_mu_);
   void SetShouldStoreGraphs(bool value);
   RunMetadata* RunMetadataProto() { return &run_metadata_; }
   void ClearRunMetadata() EXCLUSIVE_LOCKS_REQUIRED(metadata_mu_);
+
+  Status RegisterRunMetadataListener(RunMetadataListener* listener)
+      LOCKS_EXCLUDED(metadata_mu_);
+  void ClearRunMetadataListener() LOCKS_EXCLUDED(metadata_mu_);
 
   void StartStep();
   void EndStep();
@@ -259,7 +257,6 @@ class EagerContext : public core::RefCounted {
   Status GetClient(Device* device, eager::EagerClient** client);
   Status GetClient(const DeviceNameUtils::ParsedName& device_name,
                    eager::EagerClient** client);
-  Status GetClient(const string& remote_task, eager::EagerClient** client);
 
   uint64 GetContextId();
 
@@ -281,7 +278,7 @@ class EagerContext : public core::RefCounted {
       std::unique_ptr<ServerInterface> server, WorkerEnv* worker_env,
       std::shared_ptr<WorkerSession> worker_session,
       std::unique_ptr<eager::EagerClientCache> remote_eager_workers,
-      std::unique_ptr<DynamicDeviceMgr> remote_device_manager,
+      std::unique_ptr<DeviceMgr> remote_device_manager,
       const std::vector<string>& remote_contexts, uint64 context_id,
       Rendezvous* r, DeviceMgr* local_device_mgr, int keep_alive_secs,
       DistributedFunctionLibraryRuntime* cluster_flr,
@@ -292,7 +289,7 @@ class EagerContext : public core::RefCounted {
   // contexts in shutdown.
   Status InitializeRemoteWorker(
       std::unique_ptr<eager::EagerClientCache> remote_eager_workers,
-      const DynamicDeviceMgr* remote_device_mgr,
+      const DeviceMgr* remote_device_mgr,
       const std::vector<string>& remote_contexts, uint64 context_id,
       std::function<Rendezvous*(const int64)> rendezvous_creator,
       std::unique_ptr<eager::RemoteMgr, std::function<void(eager::RemoteMgr*)>>
@@ -359,8 +356,8 @@ class EagerContext : public core::RefCounted {
 
   // Only one of the below is set. remote_unowned_device_manager_ is set on
   // remote worker to allow running multi-device function on remote worker.
-  std::unique_ptr<DynamicDeviceMgr> remote_device_manager_;
-  const DynamicDeviceMgr* remote_unowned_device_manager_ = nullptr;
+  std::unique_ptr<DeviceMgr> remote_device_manager_;
+  const DeviceMgr* remote_unowned_device_manager_ = nullptr;
 
   // Devices owned by device_manager
   std::vector<Device*> devices_;
@@ -395,9 +392,11 @@ class EagerContext : public core::RefCounted {
       GUARDED_BY(cache_mu_);
 
   // Whether we should compute RunMetadata.
+  std::atomic<bool> should_store_step_stats_{false};
   std::atomic<bool> should_store_graphs_{false};
   mutex metadata_mu_;
   RunMetadata run_metadata_ GUARDED_BY(metadata_mu_);
+  RunMetadataListener* metadata_listener_ GUARDED_BY(metadata_mu_) = nullptr;
   GraphCollector graph_collector_;
   // TODO(fishx): Allow update following two bool after context creation.
   const bool log_device_placement_;
@@ -406,6 +405,10 @@ class EagerContext : public core::RefCounted {
   // Information related to step containers.
   std::atomic<int> num_active_steps_;
   std::unique_ptr<ScopedStepContainer> step_container_ GUARDED_BY(metadata_mu_);
+
+  // True if the default value for execution mode is async. Note that this value
+  // can be overridden per thread based on `thread_local_async` overrides.
+  const bool async_default_;
 
   EagerExecutor default_executor_;
   mutable mutex executor_map_mu_;
@@ -433,7 +436,7 @@ class EagerContext : public core::RefCounted {
 
   mutex remote_state_mu_;
 
-  uint64 context_id_ GUARDED_BY(remote_state_mu_);
+  uint64 context_id_;
   std::vector<string> remote_contexts_;
 
   int keep_alive_secs_ GUARDED_BY(remote_state_mu_);

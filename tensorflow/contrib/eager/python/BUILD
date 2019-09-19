@@ -29,6 +29,7 @@ py_library(
         "//tensorflow/python/eager:backprop",
         "//tensorflow/python/eager:context",
         "//tensorflow/python/eager:def_function",
+        "//tensorflow/python/eager:execution_callbacks",
         "//tensorflow/python/eager:function",
         "//tensorflow/python/eager:remote",
     ],

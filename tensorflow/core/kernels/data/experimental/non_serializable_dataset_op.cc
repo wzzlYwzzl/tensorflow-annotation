@@ -69,16 +69,13 @@ class NonSerializableDatasetOp : public UnaryDatasetOpKernel {
       return "NonSerializableDatasetOp::Dataset";
     }
 
-    Status CheckExternalState() const override {
-      return input_->CheckExternalState();
-    }
+    bool IsStateful() const override { return input_->IsStateful(); }
 
    protected:
     Status AsGraphDefInternal(SerializationContext* ctx,
                               DatasetGraphDefBuilder* b,
                               Node** output) const override {
-      return errors::Unimplemented(DebugString(),
-                                   " does not support serialization.");
+      return errors::Unimplemented(DebugString(), "::AsGraphDefInternal");
     }
 
     int64 Cardinality() const override { return input_->Cardinality(); }

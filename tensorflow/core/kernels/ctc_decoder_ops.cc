@@ -21,7 +21,6 @@ limitations under the License.
 
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/platform/logging.h"
@@ -34,12 +33,11 @@ namespace tensorflow {
 
 typedef Eigen::ThreadPoolDevice CPUDevice;
 
-template <typename T>
-inline T RowMax(const typename TTypes<T>::UnalignedConstMatrix& m, int r,
-                int* c) {
+inline float RowMax(const TTypes<float>::UnalignedConstMatrix& m, int r,
+                    int* c) {
   *c = 0;
   CHECK_LT(0, m.dimension(1));
-  auto p = m(r, 0);
+  float p = m(r, 0);
   for (int i = 1; i < m.dimension(1); ++i) {
     if (m(r, i) > p) {
       p = m(r, i);
@@ -172,7 +170,6 @@ class CTCDecodeHelper {
   TF_DISALLOW_COPY_AND_ASSIGN(CTCDecodeHelper);
 };
 
-template <typename T>
 class CTCGreedyDecoderOp : public OpKernel {
  public:
   explicit CTCGreedyDecoderOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
@@ -192,7 +189,7 @@ class CTCGreedyDecoderOp : public OpKernel {
 
     const TensorShape& inputs_shape = inputs->shape();
 
-    std::vector<typename TTypes<T>::UnalignedConstMatrix> input_list_t;
+    std::vector<TTypes<float>::UnalignedConstMatrix> input_list_t;
     const int64 max_time = inputs_shape.dim_size(0);
     const int64 batch_size = inputs_shape.dim_size(1);
     const int64 num_classes_raw = inputs_shape.dim_size(2);
@@ -201,14 +198,14 @@ class CTCGreedyDecoderOp : public OpKernel {
         errors::InvalidArgument("num_classes cannot exceed max int"));
     const int num_classes = static_cast<const int>(num_classes_raw);
 
-    auto inputs_t = inputs->tensor<T, 3>();
+    auto inputs_t = inputs->tensor<float, 3>();
 
     for (std::size_t t = 0; t < max_time; ++t) {
       input_list_t.emplace_back(inputs_t.data() + t * batch_size * num_classes,
                                 batch_size, num_classes);
     }
     auto seq_len_t = seq_len->vec<int32>();
-    auto log_prob_t = log_prob->matrix<T>();
+    auto log_prob_t = log_prob->matrix<float>();
 
     log_prob_t.setZero();
 
@@ -224,8 +221,7 @@ class CTCGreedyDecoderOp : public OpKernel {
         int prev_indices = -1;
         for (int t = 0; t < seq_len_t(b); ++t) {
           int max_class_indices;
-          log_prob_t(b, 0) +=
-              -RowMax<T>(input_list_t[t], b, &max_class_indices);
+          log_prob_t(b, 0) += -RowMax(input_list_t[t], b, &max_class_indices);
           if (max_class_indices != blank_index &&
               !(merge_repeated_ && max_class_indices == prev_indices)) {
             sequence.push_back(max_class_indices);
@@ -254,18 +250,10 @@ class CTCGreedyDecoderOp : public OpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(CTCGreedyDecoderOp);
 };
 
-#define REGISTER_CPU(T)                                                   \
-  REGISTER_KERNEL_BUILDER(                                                \
-      Name("CTCGreedyDecoder").Device(DEVICE_CPU).TypeConstraint<T>("T"), \
-      CTCGreedyDecoderOp<T>);
-
-REGISTER_CPU(float);
-REGISTER_CPU(double);
-
-#undef REGISTER_CPU
+REGISTER_KERNEL_BUILDER(Name("CTCGreedyDecoder").Device(DEVICE_CPU),
+                        CTCGreedyDecoderOp);
 
 // CTC beam search
-template <typename T>
 class CTCBeamSearchDecoderOp : public OpKernel {
  public:
   explicit CTCBeamSearchDecoderOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
@@ -287,9 +275,9 @@ class CTCBeamSearchDecoderOp : public OpKernel {
                             ctx, &inputs, &seq_len, &log_prob, &decoded_indices,
                             &decoded_values, &decoded_shape));
 
-    auto inputs_t = inputs->tensor<T, 3>();
+    auto inputs_t = inputs->tensor<float, 3>();
     auto seq_len_t = seq_len->vec<int32>();
-    auto log_prob_t = log_prob->matrix<T>();
+    auto log_prob_t = log_prob->matrix<float>();
 
     const TensorShape& inputs_shape = inputs->shape();
 
@@ -303,21 +291,21 @@ class CTCBeamSearchDecoderOp : public OpKernel {
 
     log_prob_t.setZero();
 
-    std::vector<typename TTypes<T>::UnalignedConstMatrix> input_list_t;
+    std::vector<TTypes<float>::UnalignedConstMatrix> input_list_t;
 
     for (std::size_t t = 0; t < max_time; ++t) {
       input_list_t.emplace_back(inputs_t.data() + t * batch_size * num_classes,
                                 batch_size, num_classes);
     }
 
-    ctc::CTCBeamSearchDecoder<T> beam_search(num_classes, beam_width_,
-                                             &beam_scorer_, 1 /* batch_size */,
-                                             merge_repeated_);
-    Tensor input_chip(DataTypeToEnum<T>::v(), TensorShape({num_classes}));
-    auto input_chip_t = input_chip.flat<T>();
+    ctc::CTCBeamSearchDecoder<> beam_search(num_classes, beam_width_,
+                                            &beam_scorer_, 1 /* batch_size */,
+                                            merge_repeated_);
+    Tensor input_chip(DT_FLOAT, TensorShape({num_classes}));
+    auto input_chip_t = input_chip.flat<float>();
 
     std::vector<std::vector<std::vector<int> > > best_paths(batch_size);
-    std::vector<T> log_probs;
+    std::vector<float> log_probs;
 
     // Assumption: the blank index is num_classes - 1
     for (int b = 0; b < batch_size; ++b) {
@@ -325,8 +313,8 @@ class CTCBeamSearchDecoderOp : public OpKernel {
       best_paths_b.resize(decode_helper_.GetTopPaths());
       for (int t = 0; t < seq_len_t(b); ++t) {
         input_chip_t = input_list_t[t].chip(b, 0);
-        auto input_bi = Eigen::Map<const Eigen::Array<T, Eigen::Dynamic, 1>>(
-            input_chip_t.data(), num_classes);
+        auto input_bi =
+            Eigen::Map<const Eigen::ArrayXf>(input_chip_t.data(), num_classes);
         beam_search.Step(input_bi);
       }
       OP_REQUIRES_OK(
@@ -347,20 +335,13 @@ class CTCBeamSearchDecoderOp : public OpKernel {
 
  private:
   CTCDecodeHelper decode_helper_;
-  typename ctc::CTCBeamSearchDecoder<T>::DefaultBeamScorer beam_scorer_;
+  ctc::CTCBeamSearchDecoder<>::DefaultBeamScorer beam_scorer_;
   bool merge_repeated_;
   int beam_width_;
-  TF_DISALLOW_COPY_AND_ASSIGN(CTCBeamSearchDecoderOp<T>);
+  TF_DISALLOW_COPY_AND_ASSIGN(CTCBeamSearchDecoderOp);
 };
 
-#define REGISTER_CPU(T)                                                       \
-  REGISTER_KERNEL_BUILDER(                                                    \
-      Name("CTCBeamSearchDecoder").Device(DEVICE_CPU).TypeConstraint<T>("T"), \
-      CTCBeamSearchDecoderOp<T>);
-
-REGISTER_CPU(float);
-REGISTER_CPU(double);
-
-#undef REGISTER_CPU
+REGISTER_KERNEL_BUILDER(Name("CTCBeamSearchDecoder").Device(DEVICE_CPU),
+                        CTCBeamSearchDecoderOp);
 
 }  // end namespace tensorflow

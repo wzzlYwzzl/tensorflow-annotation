@@ -79,10 +79,10 @@ class MergeV2CheckpointsOpTest : public OpsTestBase {
     // Now merges.
     MakeOp(delete_old_dirs);
     // Add checkpoint_prefixes.
-    AddInput<tstring>(TensorShape({2}),
-                      [&prefixes](int i) -> tstring { return prefixes[i]; });
+    AddInput<string>(TensorShape({2}),
+                     [&prefixes](int i) -> string { return prefixes[i]; });
     // Add destination_prefix.
-    AddInput<tstring>(TensorShape({}), [kMergedPrefix](int unused) -> tstring {
+    AddInput<string>(TensorShape({}), [kMergedPrefix](int unused) -> string {
       return kMergedPrefix;
     });
     TF_ASSERT_OK(RunOpKernel());

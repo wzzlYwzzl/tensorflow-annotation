@@ -92,7 +92,7 @@ class LookupTableOp : public OpKernel {
                                                       cinfo_.name());
     } else {
       if (!table_handle_set_) {
-        auto h = table_handle_.AccessTensor(ctx)->template flat<tstring>();
+        auto h = table_handle_.AccessTensor(ctx)->template flat<string>();
         h(0) = cinfo_.container();
         h(1) = cinfo_.name();
       }
@@ -134,7 +134,7 @@ T SubtleMustCopyIfIntegral(const T& value) {
   return internal::SubtleMustCopy(value);
 }
 
-inline const tstring& SubtleMustCopyIfIntegral(const tstring& value) {
+inline const string& SubtleMustCopyIfIntegral(const string& value) {
   return value;
 }
 

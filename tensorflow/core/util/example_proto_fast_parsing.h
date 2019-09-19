@@ -57,15 +57,8 @@ struct FastParseExampleConfig {
     DataType dtype;
   };
 
-  struct Ragged {
-    string feature_name;
-    DataType dtype;
-    DataType splits_dtype;
-  };
-
   std::vector<Dense> dense;
   std::vector<Sparse> sparse;
-  std::vector<Ragged> ragged;
 
   // If `true`, `Result::feature_stats` will contain one
   // `PerExampleFeatureStats` for each serialized example in the input.
@@ -95,8 +88,6 @@ struct Result {
   std::vector<Tensor> sparse_values;
   std::vector<Tensor> sparse_shapes;
   std::vector<Tensor> dense_values;
-  std::vector<Tensor> ragged_values;
-  std::vector<Tensor> ragged_splits;
 
   // This vector will be populated with one element per example if
   // `FastParseExampleConfig::collect_feature_stats` is set to `true`.
@@ -108,8 +99,8 @@ struct Result {
 // Given example names have to either be empty or the same size as serialized.
 // example_names are used only for error messages.
 Status FastParseExample(const FastParseExampleConfig& config,
-                        gtl::ArraySlice<tstring> serialized,
-                        gtl::ArraySlice<tstring> example_names,
+                        gtl::ArraySlice<string> serialized,
+                        gtl::ArraySlice<string> example_names,
                         thread::ThreadPool* thread_pool, Result* result);
 
 // TODO(mrry): Move the hash table construction into the config object.
@@ -125,7 +116,7 @@ Status FastParseSingleExample(const FastParseSingleExampleConfig& config,
 Status FastParseSequenceExample(
     const example::FastParseExampleConfig& context_config,
     const example::FastParseExampleConfig& feature_list_config,
-    gtl::ArraySlice<tstring> serialized, gtl::ArraySlice<tstring> example_names,
+    gtl::ArraySlice<string> serialized, gtl::ArraySlice<string> example_names,
     thread::ThreadPool* thread_pool, example::Result* context_result,
     example::Result* feature_list_result,
     std::vector<Tensor>* dense_feature_lengths);

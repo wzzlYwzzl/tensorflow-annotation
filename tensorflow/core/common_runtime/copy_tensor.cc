@@ -61,14 +61,15 @@ void CopyHostToDevice(const Tensor* input, Allocator* cpu_allocator,
       status_cb->UpdateStatus(s);
       status_cb->Unref();
     };
-    auto copier =
+    auto copier = std::bind(
         [dst, recv_dev_context, out_allocator, status_cb, cpu_allocator,
-         edge_name, sync_dst_compute, wrapped_done = std::move(wrapped_done)](
-            const Tensor& from, Tensor* to) {
+         edge_name, sync_dst_compute](StatusCallback wrapped_done_,
+                                      // Begin unbound arguments
+                                      const Tensor& from, Tensor* to) {
           if (from.dtype() == DT_VARIANT) {
             status_cb->Ref();
             CopyHostToDevice(&from, cpu_allocator, out_allocator, edge_name,
-                             dst, to, recv_dev_context, wrapped_done,
+                             dst, to, recv_dev_context, wrapped_done_,
                              sync_dst_compute);
             return Status::OK();
           } else {
@@ -84,13 +85,14 @@ void CopyHostToDevice(const Tensor* input, Allocator* cpu_allocator,
               status_cb->Ref();
               *to = Tensor(out_allocator, from.dtype(), from.shape());
               recv_dev_context->CopyCPUTensorToDevice(
-                  &from, dst, to, wrapped_done, sync_dst_compute);
+                  &from, dst, to, wrapped_done_, sync_dst_compute);
               return Status::OK();
             } else {
               return status_cb->status();
             }
           }
-        };
+        },
+        std::move(wrapped_done), std::placeholders::_1, std::placeholders::_2);
 
     const Variant* v = input->flat<Variant>().data();
     Variant* v_out = copy.flat<Variant>().data();
@@ -133,18 +135,18 @@ void CopyDeviceToDevice(CopyTensor::CopyFunction copy_function,
       status_cb->UpdateStatus(s);
       status_cb->Unref();
     };
-    auto copier =
+    auto copier = std::bind(
         [copy_function, cpu_allocator, src, dst, src_alloc_attr, dst_alloc_attr,
          recv_dev_context, send_dev_context, out_allocator, status_cb,
-         dev_to_dev_stream_index, wrapped_done = std::move(wrapped_done)](
-            // Begin unbound arguments
-            const Tensor& from, Tensor* to) {
+         dev_to_dev_stream_index](StatusCallback wrapped_done_,
+                                  // Begin unbound arguments
+                                  const Tensor& from, Tensor* to) {
           if (from.dtype() == DT_VARIANT) {
             status_cb->Ref();
             CopyDeviceToDevice(copy_function, cpu_allocator, out_allocator,
                                send_dev_context, recv_dev_context, src, dst,
                                src_alloc_attr, dst_alloc_attr, &from, to,
-                               dev_to_dev_stream_index, wrapped_done);
+                               dev_to_dev_stream_index, wrapped_done_);
             return Status::OK();
           } else {
             if (!DMAHelper::CanUseDMA(&from)) {
@@ -160,13 +162,14 @@ void CopyDeviceToDevice(CopyTensor::CopyFunction copy_function,
               *to = Tensor(out_allocator, from.dtype(), from.shape());
               copy_function(send_dev_context, recv_dev_context, src, dst,
                             src_alloc_attr, dst_alloc_attr, &from, to,
-                            dev_to_dev_stream_index, wrapped_done);
+                            dev_to_dev_stream_index, std::move(wrapped_done_));
               return Status::OK();
             } else {
               return status_cb->status();
             }
           }
-        };
+        },
+        std::move(wrapped_done), std::placeholders::_1, std::placeholders::_2);
 
     const Variant* v = input->flat<Variant>().data();
     Variant* v_out = copy.flat<Variant>().data();
@@ -245,23 +248,29 @@ void CopyTensor::ViaDMA(StringPiece edge_name, DeviceContext* send_dev_context,
 
     Tensor* cpu_tensor =
         new Tensor(cpu_allocator, input->dtype(), input->shape());
-    auto delete_and_done = [cpu_tensor,
-                            done = std::move(done)](const Status& status) {
-      delete cpu_tensor;
-      done(status);
-    };
-    auto then_copy_to_other_device =
-        [delete_and_done = std::move(delete_and_done), recv_dev_context,
-         cpu_tensor, cpu_allocator, out_allocator, edge_name, dst, output,
-         sync_dst_compute](Status status) {
+    std::function<void(const Status&)> delete_and_done = std::bind(
+        [cpu_tensor](StatusCallback done_,
+                     // Begin unbound arguments.
+                     const Status& status) {
+          delete cpu_tensor;
+          done_(status);
+        },
+        std::move(done), std::placeholders::_1);
+    std::function<void(const Status&)> then_copy_to_other_device = std::bind(
+        [delete_and_done, recv_dev_context, cpu_tensor, cpu_allocator,
+         out_allocator, edge_name, dst, output,
+         sync_dst_compute](StatusCallback delete_and_done_,
+                           // Begin unbound arguments.
+                           Status status) {
           if (!status.ok()) {
-            delete_and_done(status);
+            delete_and_done_(status);
             return;
           }
           CopyHostToDevice(cpu_tensor, cpu_allocator, out_allocator, edge_name,
                            dst, output, recv_dev_context,
-                           std::move(delete_and_done), sync_dst_compute);
-        };
+                           std::move(delete_and_done_), sync_dst_compute);
+        },
+        std::move(delete_and_done), std::placeholders::_1);
     CopyDeviceToHost(input, cpu_allocator, out_allocator, edge_name, src,
                      cpu_tensor, send_dev_context,
                      std::move(then_copy_to_other_device));
@@ -345,14 +354,15 @@ void CopyDeviceToHost(const Tensor* input, Allocator* cpu_allocator,
       status_cb->UpdateStatus(s);
       status_cb->Unref();
     };
-    auto copier =
+    auto copier = std::bind(
         [edge_name, src, send_dev_context, out_allocator, status_cb,
-         cpu_allocator, wrapped_done = std::move(wrapped_done)](
-            const Tensor& from, Tensor* to) {
+         cpu_allocator](StatusCallback wrapped_done_,
+                        // Begin unbound arguments
+                        const Tensor& from, Tensor* to) {
           if (from.dtype() == DT_VARIANT) {
             status_cb->Ref();
             CopyDeviceToHost(&from, cpu_allocator, out_allocator, edge_name,
-                             src, to, send_dev_context, wrapped_done);
+                             src, to, send_dev_context, wrapped_done_);
             return Status::OK();
           } else {
             if (!DMAHelper::CanUseDMA(&from)) {
@@ -367,13 +377,14 @@ void CopyDeviceToHost(const Tensor* input, Allocator* cpu_allocator,
               status_cb->Ref();
               *to = Tensor(out_allocator, from.dtype(), from.shape());
               send_dev_context->CopyDeviceTensorToCPU(&from, edge_name, src, to,
-                                                      wrapped_done);
+                                                      wrapped_done_);
               return Status::OK();
             } else {
               return status_cb->status();
             }
           }
-        };
+        },
+        std::move(wrapped_done), std::placeholders::_1, std::placeholders::_2);
 
     const Variant* v = input->flat<Variant>().data();
     Variant* v_out = copy.flat<Variant>().data();

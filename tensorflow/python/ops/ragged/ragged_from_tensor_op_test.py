@@ -56,182 +56,151 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
       {
           'tensor': [[]],
           'expected': [[]],
-          'expected_shape': [1, 0],
       },
       {
           'tensor': [[1]],
           'expected': [[1]],
-          'expected_shape': [1, 1],
       },
       {
           'tensor': [[1, 2]],
           'expected': [[1, 2]],
-          'expected_shape': [1, 2],
       },
       {
           'tensor': [[1], [2], [3]],
           'expected': [[1], [2], [3]],
-          'expected_shape': [3, 1],
       },
       {
           'tensor': [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
           'expected': [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
-          'expected_shape': [3, 3],
       },
       # 3D test cases, no length or padding
       {
           'tensor': [[[]]],
           'expected': [[[]]],
-          'expected_shape': [1, 1, 0],
       },
       {
           'tensor': [[[]]],
           'expected': [[[]]],
           'ragged_rank': 1,
-          'expected_shape': [1, 1, 0],
       },
       {
           'tensor': [[[1]]],
           'expected': [[[1]]],
-          'expected_shape': [1, 1, 1],
       },
       {
           'tensor': [[[1, 2]]],
           'expected': [[[1, 2]]],
-          'expected_shape': [1, 1, 2],
       },
       {
           'tensor': [[[1, 2], [3, 4]]],
           'expected': [[[1, 2], [3, 4]]],
-          'expected_shape': [1, 2, 2],
       },
       {
           'tensor': [[[1, 2]], [[3, 4]], [[5, 6]], [[7, 8]]],
           'expected': [[[1, 2]], [[3, 4]], [[5, 6]], [[7, 8]]],
-          'expected_shape': [4, 1, 2],
       },
       {
           'tensor': [[[1], [2]], [[3], [4]], [[5], [6]], [[7], [8]]],
           'expected': [[[1], [2]], [[3], [4]], [[5], [6]], [[7], [8]]],
-          'expected_shape': [4, 2, 1],
       },
       # 2D test cases, with length
       {
           'tensor': [[1]],
           'lengths': [1],
-          'expected': [[1]],
-          'expected_shape': [1, None],
+          'expected': [[1]]
       },
       {
           'tensor': [[1]],
           'lengths': [0],
-          'expected': [[]],
-          'expected_shape': [1, None],
+          'expected': [[]]
       },
       {
           'tensor': [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
           'lengths': [0, 1, 2],
-          'expected': [[], [4], [7, 8]],
-          'expected_shape': [3, None],
+          'expected': [[], [4], [7, 8]]
       },
       {
           'tensor': [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
           'lengths': [0, 0, 0],
-          'expected': [[], [], []],
-          'expected_shape': [3, None],
+          'expected': [[], [], []]
       },
       {
           'tensor': [[1, 2], [3, 4]],
           'lengths': [2, 2],
-          'expected': [[1, 2], [3, 4]],
-          'expected_shape': [2, None],
+          'expected': [[1, 2], [3, 4]]
       },
       {
           'tensor': [[1, 2], [3, 4]],
           'lengths': [7, 8],  # lengths > ncols: truncated to ncols
-          'expected': [[1, 2], [3, 4]],
-          'expected_shape': [2, None],
+          'expected': [[1, 2], [3, 4]]
       },
       {
           'tensor': [[1, 2], [3, 4]],
           'lengths': [-2, -1],  # lengths < 0: treated as zero
-          'expected': [[], []],
-          'expected_shape': [2, None],
+          'expected': [[], []]
       },
       # 3D test cases, with length
       {
           'tensor': [[[1, 2], [3, 4]], [[5, 6], [7, 8]]],
           'lengths': [0, 0],
-          'expected': [[], []],
-          'expected_shape': [2, None, 2],
+          'expected': [[], []]
       },
       {
           'tensor': [[[1, 2], [3, 4]], [[5, 6], [7, 8]]],
           'lengths': [1, 2],
-          'expected': [[[1, 2]], [[5, 6], [7, 8]]],
-          'expected_shape': [2, None, 2],
+          'expected': [[[1, 2]], [[5, 6], [7, 8]]]
       },
       {
           'tensor': [[[1, 2], [3, 4]], [[5, 6], [7, 8]]],
           'lengths': [2, 2],
-          'expected': [[[1, 2], [3, 4]], [[5, 6], [7, 8]]],
-          'expected_shape': [2, None, 2],
+          'expected': [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
       },
       # 2D test cases, with padding
       {
           'tensor': [[1]],
           'padding': 0,
-          'expected': [[1]],
-          'expected_shape': [1, None],
+          'expected': [[1]]
       },
       {
           'tensor': [[0]],
           'padding': 0,
-          'expected': [[]],
-          'expected_shape': [1, None],
+          'expected': [[]]
       },
       {
           'tensor': [[0, 1]],
           'padding': 0,
-          'expected': [[0, 1]],
-          'expected_shape': [1, None],
+          'expected': [[0, 1]]
       },
       {
           'tensor': [[1, 0]],
           'padding': 0,
-          'expected': [[1]],
-          'expected_shape': [1, None],
+          'expected': [[1]]
       },
       {
           'tensor': [[1, 0, 1, 0, 0, 1, 0, 0]],
           'padding': 0,
-          'expected': [[1, 0, 1, 0, 0, 1]],
-          'expected_shape': [1, None],
+          'expected': [[1, 0, 1, 0, 0, 1]]
       },
       {
           'tensor': [[3, 7, 0, 0], [2, 0, 0, 0], [5, 0, 0, 0]],
           'padding': 0,
-          'expected': [[3, 7], [2], [5]],
-          'expected_shape': [3, None],
+          'expected': [[3, 7], [2], [5]]
       },
       # 3D test cases, with padding
       {
           'tensor': [[[1]]],
           'padding': [0],
-          'expected': [[[1]]],
-          'expected_shape': [1, None, 1],
+          'expected': [[[1]]]
       },
       {
           'tensor': [[[0]]],
           'padding': [0],
-          'expected': [[]],
-          'expected_shape': [1, None, 1],
+          'expected': [[]]
       },
       {
           'tensor': [[[0, 0], [1, 2]], [[3, 4], [0, 0]]],
           'padding': [0, 0],
-          'expected': [[[0, 0], [1, 2]], [[3, 4]]],
-          'expected_shape': [2, None, 2],
+          'expected': [[[0, 0], [1, 2]], [[3, 4]]]
       },
       # 4D test cases, with padding
       {
@@ -245,29 +214,25 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
               [[[1, 2], [3, 4]]],
               [[[0, 0], [0, 0]], [[5, 6], [7, 8]]],
               []
-          ],
-          'expected_shape': [3, None, 2, 2],
+          ]
       },
       # 3D test cases, with ragged_rank=2.
       {
           'tensor': [[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
           'ragged_rank': 2,
-          'expected': [[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
-          'expected_shape': [2, 2, 2],
+          'expected': [[[1, 0], [2, 3]], [[0, 0], [4, 0]]]
       },
       {
           'tensor': [[[1, 2], [3, 4]], [[5, 6], [7, 8]]],
           'ragged_rank': 2,
           'lengths': [2, 0, 2, 1],
-          'expected': [[[1, 2], []], [[5, 6], [7]]],
-          'expected_shape': [2, 2, None],
+          'expected': [[[1, 2], []], [[5, 6], [7]]]
       },
       {
           'tensor': [[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
           'ragged_rank': 2,
           'padding': 0,
-          'expected': [[[1], [2, 3]], [[], [4]]],
-          'expected_shape': [2, 2, None],
+          'expected': [[[1], [2, 3]], [[], [4]]]
       },
       # 4D test cases, with ragged_rank>1
       {
@@ -275,16 +240,14 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
                      [[[5, 6], [7, 0]], [[0, 8], [0, 0]]]],
           'ragged_rank': 2,
           'expected': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
-                       [[[5, 6], [7, 0]], [[0, 8], [0, 0]]]],
-          'expected_shape': [2, 2, 2, 2],
+                       [[[5, 6], [7, 0]], [[0, 8], [0, 0]]]]
       },
       {
           'tensor': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
                      [[[5, 6], [7, 0]], [[0, 8], [0, 0]]]],
           'ragged_rank': 3,
           'expected': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
-                       [[[5, 6], [7, 0]], [[0, 8], [0, 0]]]],
-          'expected_shape': [2, 2, 2, 2],
+                       [[[5, 6], [7, 0]], [[0, 8], [0, 0]]]]
       },
       {
           'tensor': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
@@ -292,8 +255,7 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
           'ragged_rank': 2,
           'padding': [0, 0],
           'expected': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
-                       [[[5, 6], [7, 0]], [[0, 8]]]],
-          'expected_shape': [2, 2, None, 2],
+                       [[[5, 6], [7, 0]], [[0, 8]]]]
       },
       {
           'tensor': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
@@ -302,8 +264,7 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
           'expected': [[[[1, 0]], [[0, 0], [4, 0]]],
                        [[[5, 6], [7, 0]], [[0, 8]]]],
           'ragged_rank': 2,
-          'use_ragged_rank': False,  # lengths contains nested_row_lengths.
-          'expected_shape': [2, None, None, 2],
+          'use_ragged_rank': False
       },
       {
           'tensor': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
@@ -312,8 +273,7 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
           'expected': [[[[1, 0]], [[0, 0], [4, 0]]],
                        [[[5, 6], [7, 0]], [[0, 8]]]],
           'ragged_rank': 2,
-          'use_ragged_rank': False,  # lengths contains nested_row_lengths.
-          'expected_shape': [2, None, None, 2],
+          'use_ragged_rank': False
       },
       {
           'tensor': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
@@ -321,8 +281,7 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
           'ragged_rank': 3,
           'padding': 0,
           'expected': [[[[1], [2, 3]], [[], [4]]],
-                       [[[5, 6], [7]], [[0, 8], []]]],
-          'expected_shape': [2, 2, 2, None],
+                       [[[5, 6], [7]], [[0, 8], []]]]
       },
       {
           'tensor': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
@@ -331,8 +290,7 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
           'expected': [[[[1], [2, 3]], [[], [4]]],
                        [[[5, 6], [7]], [[0, 8], []]]],
           'ragged_rank': 3,
-          'use_ragged_rank': False,  # lengths contains nested_row_lengths.
-          'expected_shape': [2, None, None, None],
+          'use_ragged_rank': False
       },
       {
           'tensor': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
@@ -341,8 +299,7 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
           'expected': [[[[1], [2, 3]], [[], [4]]],
                        [[[5, 6], [7]], [[0, 8], []]]],
           'ragged_rank': 3,
-          'use_ragged_rank': False,  # lengths contains nested_row_lengths.
-          'expected_shape': [2, None, None, None],
+          'use_ragged_rank': False
       },
   )  # pyformat: disable
   def testRaggedFromTensor(self,
@@ -351,8 +308,7 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
                            lengths=None,
                            padding=None,
                            ragged_rank=1,
-                           use_ragged_rank=True,
-                           expected_shape=None):
+                           use_ragged_rank=True):
     dt = constant_op.constant(tensor)
     if use_ragged_rank:
       rt = RaggedTensor.from_tensor(dt, lengths, padding, ragged_rank)
@@ -363,8 +319,6 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
     self.assertTrue(
         dt.shape.is_compatible_with(rt.shape),
         '%s is incompatible with %s' % (dt.shape, rt.shape))
-    if expected_shape is not None:
-      self.assertEqual(rt.shape.as_list(), expected_shape)
     self.assertAllEqual(rt, expected)
 
   def testHighDimensions(self):
@@ -537,14 +491,6 @@ class RaggedTensorToSparseOpTest(test_util.TensorFlowTestCase,
           'tensor': [[1]],
           'ragged_rank': -1,
           'error': (ValueError, r'ragged_rank must be greater than 0; got -1')
-      },
-      {
-          'tensor': [[[[1, 0], [2, 3]], [[0, 0], [4, 0]]],
-                     [[[5, 6], [7, 0]], [[0, 8], [0, 0]]]],
-          'lengths': ([2, 2], [2, 2, 2, 2]),
-          'ragged_rank': 3,
-          'error': (ValueError, r'If lengths is a tuple of row_lengths, then '
-                    r'ragged_rank must be len\(lengths\).')
       },
   )
   def testErrors(self,

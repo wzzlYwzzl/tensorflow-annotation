@@ -162,28 +162,12 @@ string MemorySpaceString(MemorySpace memory_space) {
 
 namespace {
 
-bool IsPointerCheckDisabled() {
-  // We want to check pointers for validity normally, but the
-  // cudaPointerGetAttributes call actually returns an error if it is given a
-  // host pointer.  This confuses tools like cuda-memcheck and cuda-gdb.
-  //
-  // TF_DISABLE_GPU_POINTER_CHECKS gives us an escape hatch for reducing logspam
-  // when using cuda-memcheck and cuda-gdb.
-  return std::getenv("TF_DISABLE_GPU_POINTER_CHECKS") != nullptr;
-}
-
 // Checks that the pointer is to a location on the device it purports to be.
 // PtrT is one of CUdeviceptr or void*.  If it's a CUdeviceptr, then
 // cudaPointerGetAttributes should not fail, and return a memoryType of
 // cudaMemoryTypeDevice.
 template <typename PtrT>
 void CheckPointerIsValid(const PtrT ptr, absl::string_view name) {
-  static bool pointer_check_disabled = IsPointerCheckDisabled();
-
-  if (pointer_check_disabled) {
-    return;
-  }
-
   bool is_host_ptr = !std::is_same<PtrT, CUdeviceptr>::value;
   cudaPointerAttributes attributes;
   cudaError_t err =
@@ -555,7 +539,7 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   return port::Status::OK();
 }
 
-/* static */ port::Status GpuDriver::LaunchKernel(
+/* static */ bool GpuDriver::LaunchKernel(
     GpuContext* context, CUfunction function, unsigned int grid_dim_x,
     unsigned int grid_dim_y, unsigned int grid_dim_z, unsigned int block_dim_x,
     unsigned int block_dim_y, unsigned int block_dim_z,
@@ -570,12 +554,12 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
                                 block_dim_x, block_dim_y, block_dim_z,
                                 shared_mem_bytes, stream, kernel_params, extra);
   if (res != CUDA_SUCCESS) {
-    return port::InternalError(absl::StrCat(
-        "Failed to launch CUDA kernel: ", reinterpret_cast<uint64>(function),
-        "; result: ", ToString(res)));
+    LOG(ERROR) << "failed to launch CUDA kernel: " << function
+               << "; result: " << ToString(res);
+    return false;
   }
   VLOG(2) << "successfully launched kernel";
-  return port::Status::OK();
+  return true;
 }
 
 /* static */ port::Status GpuDriver::LoadCubin(GpuContext* context,
@@ -591,11 +575,11 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
   return port::Status::OK();
 }
 
-/* static */ port::Status GpuDriver::LoadPtx(GpuContext* context,
-                                             const char* ptx_contents,
-                                             CUmodule* module) {
+/* static */ bool GpuDriver::LoadPtx(GpuContext* context,
+                                     const char* ptx_contents,
+                                     CUmodule* module) {
   absl::Notification notification;
-  port::Status ret = port::Status::OK();
+  bool ret = true;
   GetDriverExecutor()->Schedule([context, ptx_contents, module, &ret,
                                  &notification]() {
     ScopedActivateContext activation(context);
@@ -645,8 +629,7 @@ GpuDriver::ContextGetSharedMemConfig(GpuContext* context) {
                                               : 0] = '\0';
       LOG(ERROR) << "error log buffer (" << error_log_buffer_bytes
                  << " bytes): " << error_log_buffer.data();
-      ret = port::InternalError(
-          absl::StrCat("Failed to load PTX text as a module: ", ToString(res)));
+      ret = false;
       notification.Notify();
     }
 

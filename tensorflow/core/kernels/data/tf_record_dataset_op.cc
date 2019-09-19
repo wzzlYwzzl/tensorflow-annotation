@@ -74,8 +74,6 @@ class TFRecordDatasetOp::Dataset : public DatasetBase {
     return name_utils::DatasetDebugString(kDatasetType);
   }
 
-  Status CheckExternalState() const override { return Status::OK(); }
-
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
                             DatasetGraphDefBuilder* b,
@@ -107,10 +105,10 @@ class TFRecordDatasetOp::Dataset : public DatasetBase {
           out_tensors->emplace_back(ctx->allocator({}), DT_STRING,
                                     TensorShape({}));
           Status s =
-              reader_->ReadRecord(&out_tensors->back().scalar<tstring>()());
+              reader_->ReadRecord(&out_tensors->back().scalar<string>()());
           if (s.ok()) {
             metrics::RecordTFDataBytesRead(
-                kDatasetType, out_tensors->back().scalar<tstring>()().size());
+                kDatasetType, out_tensors->back().scalar<string>()().size());
             *end_of_sequence = false;
             return Status::OK();
           }
@@ -208,7 +206,7 @@ class TFRecordDatasetOp::Dataset : public DatasetBase {
   };
 
   const std::vector<string> filenames_;
-  const tstring compression_type_;
+  const string compression_type_;
   io::RecordReaderOptions options_;
 };
 
@@ -226,13 +224,13 @@ void TFRecordDatasetOp::MakeDataset(OpKernelContext* ctx,
   std::vector<string> filenames;
   filenames.reserve(filenames_tensor->NumElements());
   for (int i = 0; i < filenames_tensor->NumElements(); ++i) {
-    VLOG(2) << "Reading file: " << filenames_tensor->flat<tstring>()(i);
-    filenames.push_back(filenames_tensor->flat<tstring>()(i));
+    VLOG(2) << "Reading file: " << filenames_tensor->flat<string>()(i);
+    filenames.push_back(filenames_tensor->flat<string>()(i));
   }
 
-  tstring compression_type;
-  OP_REQUIRES_OK(ctx, ParseScalarArgument<tstring>(ctx, kCompressionType,
-                                                   &compression_type));
+  string compression_type;
+  OP_REQUIRES_OK(ctx, ParseScalarArgument<string>(ctx, kCompressionType,
+                                                  &compression_type));
 
   int64 buffer_size = -1;
   OP_REQUIRES_OK(ctx,

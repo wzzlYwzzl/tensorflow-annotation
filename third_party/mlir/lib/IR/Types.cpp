@@ -24,10 +24,6 @@
 using namespace mlir;
 using namespace mlir::detail;
 
-//===----------------------------------------------------------------------===//
-// Type
-//===----------------------------------------------------------------------===//
-
 unsigned Type::getKind() const { return impl->getKind(); }
 
 /// Get the dialect this type is registered to.
@@ -38,9 +34,7 @@ MLIRContext *Type::getContext() const { return getDialect().getContext(); }
 unsigned Type::getSubclassData() const { return impl->getSubclassData(); }
 void Type::setSubclassData(unsigned val) { impl->setSubclassData(val); }
 
-//===----------------------------------------------------------------------===//
-// FunctionType
-//===----------------------------------------------------------------------===//
+/// Function Type.
 
 FunctionType FunctionType::get(ArrayRef<Type> inputs, ArrayRef<Type> results,
                                MLIRContext *context) {
@@ -57,9 +51,7 @@ ArrayRef<Type> FunctionType::getResults() const {
   return getImpl()->getResults();
 }
 
-//===----------------------------------------------------------------------===//
-// OpaqueType
-//===----------------------------------------------------------------------===//
+/// OpaqueType
 
 OpaqueType OpaqueType::get(Identifier dialect, StringRef typeData,
                            MLIRContext *context) {

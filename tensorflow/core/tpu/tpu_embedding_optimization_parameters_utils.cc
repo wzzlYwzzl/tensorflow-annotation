@@ -47,8 +47,6 @@ string GetOptimizationAlgorithmName(OptimizationAlgorithm alg) {
       return "Adadelta";
     case OptimizationAlgorithm::kProximalAdagrad:
       return "ProximalAdagrad";
-    case OptimizationAlgorithm::kOnlineYogi:
-      return "OnlineYogi";
     case OptimizationAlgorithm::PARAMETERS_NOT_SET:
       return "*** Not set ***";
   }
@@ -79,8 +77,6 @@ string GetOptimizationAlgorithmFriendlyName(OptimizationAlgorithm alg) {
       return "Adadelta";
     case OptimizationAlgorithm::kProximalAdagrad:
       return "proximal Adagrad";
-    case OptimizationAlgorithm::kOnlineYogi:
-      return "online Yogi";
     case OptimizationAlgorithm::PARAMETERS_NOT_SET:
       return "unknown (not specified)";
   }
@@ -124,9 +120,6 @@ Status GetBaseAuxiliaryParameterCount(OptimizationAlgorithm alg, int* count) {
       return Status::OK();
     case OptimizationAlgorithm::kProximalAdagrad:
       *count = 1;
-      return Status::OK();
-    case OptimizationAlgorithm::kOnlineYogi:
-      *count = 2;
       return Status::OK();
     case OptimizationAlgorithm::PARAMETERS_NOT_SET:
       return errors::InvalidArgument("No optimization algorithm specified");
@@ -249,13 +242,6 @@ Status GetOptimizationAlgorithmStateVariables(
           MakeStandardStateVariableSpecification("accumulators", 0.1));
       break;
     }
-    case OptimizationAlgorithm::kOnlineYogi: {
-      state_variables->push_back(
-          MakeStandardStateVariableSpecification("vs", 0.0));
-      state_variables->push_back(
-          MakeStandardStateVariableSpecification("linears", 0.0));
-      break;
-    }
     case OptimizationAlgorithm::PARAMETERS_NOT_SET: {
       return errors::InvalidArgument("No optimization algorithm specified");
     }
@@ -291,7 +277,6 @@ std::vector<OptimizationAlgorithm> GetOptimizationAlgorithms() {
       OptimizationAlgorithm::kMdlAdagradLight,
       OptimizationAlgorithm::kAdadelta,
       OptimizationAlgorithm::kProximalAdagrad,
-      OptimizationAlgorithm::kOnlineYogi,
   };
 }
 
@@ -344,12 +329,6 @@ Status RegisterPerTableLoadOpsForAlgorithmBody(
     auto* shard_id_attr = op_def->add_attr();
     shard_id_attr->set_name("shard_id");
     shard_id_attr->set_type("int");
-  }
-  {
-    auto* embedding_config_attr = op_def->add_attr();
-    embedding_config_attr->set_name("config");
-    embedding_config_attr->set_type("string");
-    embedding_config_attr->mutable_default_value()->set_s("");
   }
   string parameter_descriptions;
   for (const auto& parameter : state_variable_specs) {
@@ -468,12 +447,6 @@ Status RegisterPerTableRetrieveOpsForAlgorithmBody(
     shard_id_attr->set_name("shard_id");
     shard_id_attr->set_type("int");
   }
-  {
-    auto* embedding_config_attr = op_def->add_attr();
-    embedding_config_attr->set_name("config");
-    embedding_config_attr->set_type("string");
-    embedding_config_attr->mutable_default_value()->set_s("");
-  }
   string parameter_descriptions;
   for (const auto& param : state_variable_specs) {
     if (param.has_user_defined() || is_debug_op) {
@@ -535,8 +508,7 @@ Status IsOptimizationAlgorithmInternal(OptimizationAlgorithm alg,
       *internal = false;
       return Status::OK();
     }
-    case OptimizationAlgorithm::kBoundedAdagrad:
-    case OptimizationAlgorithm::kOnlineYogi: {
+    case OptimizationAlgorithm::kBoundedAdagrad: {
       *internal = true;
       return Status::OK();
     }

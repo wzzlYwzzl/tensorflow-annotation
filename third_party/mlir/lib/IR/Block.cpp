@@ -49,9 +49,9 @@ Block::~Block() {
 Region *Block::getParent() { return parentValidInstOrderPair.getPointer(); }
 
 /// Returns the closest surrounding operation that contains this block or
-/// nullptr if this block is unlinked.
-Operation *Block::getParentOp() {
-  return getParent() ? getParent()->getParentOp() : nullptr;
+/// nullptr if this is a top-level operation block.
+Operation *Block::getContainingOp() {
+  return getParent() ? getParent()->getContainingOp() : nullptr;
 }
 
 /// Return if this block is the entry block in the parent region.
@@ -222,6 +222,22 @@ Block *Block::getSinglePredecessor() {
   auto *firstPred = *it;
   ++it;
   return it == pred_end() ? firstPred : nullptr;
+}
+
+//===----------------------------------------------------------------------===//
+// Operation Walkers
+//===----------------------------------------------------------------------===//
+
+void Block::walk(llvm::function_ref<void(Operation *)> callback) {
+  walk(begin(), end(), callback);
+}
+
+/// Walk the operations in the specified [begin, end) range of this block,
+/// calling the callback for each operation.
+void Block::walk(Block::iterator begin, Block::iterator end,
+                 llvm::function_ref<void(Operation *)> callback) {
+  for (auto &op : llvm::make_early_inc_range(llvm::make_range(begin, end)))
+    op.walk(callback);
 }
 
 //===----------------------------------------------------------------------===//

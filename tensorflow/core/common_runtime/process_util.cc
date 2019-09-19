@@ -139,10 +139,12 @@ void SchedClosure(std::function<void()> closure) {
   uint64 id = tracing::GetUniqueArg();
   tracing::RecordEvent(tracing::EventCategory::kScheduleClosure, id);
 
-  Env::Default()->SchedClosure([id, closure = std::move(closure)]() {
-    tracing::ScopedRegion region(tracing::EventCategory::kRunClosure, id);
-    closure();
-  });
+  Env::Default()->SchedClosure(std::bind(
+      [id](std::function<void()> closure) {
+        tracing::ScopedRegion region(tracing::EventCategory::kRunClosure, id);
+        closure();
+      },
+      std::move(closure)));
 }
 
 void SchedNonBlockingClosureAfter(int64 micros, std::function<void()> closure) {

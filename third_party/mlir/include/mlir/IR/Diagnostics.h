@@ -596,10 +596,6 @@ public:
   /// that it is receiving on.
   void setOrderIDForThread(size_t orderID);
 
-  /// Remove the order id for the current thread. This removes the thread from
-  /// diagnostics tracking.
-  void eraseOrderIDForThread();
-
 private:
   std::unique_ptr<detail::ParallelDiagnosticHandlerImpl> impl;
 };

@@ -17,14 +17,10 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from absl.testing import parameterized
-
 from tensorflow.python.data.experimental.kernel_tests.serialization import dataset_serialization_test_base
 from tensorflow.python.data.experimental.ops import batching
 from tensorflow.python.data.experimental.ops import optimization
-from tensorflow.python.data.kernel_tests import test_base
 from tensorflow.python.data.ops import dataset_ops
-from tensorflow.python.framework import combinations
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.ops import math_ops
@@ -32,10 +28,8 @@ from tensorflow.python.platform import test
 
 
 class ChooseFastestBranchDatasetSerializationTest(
-    dataset_serialization_test_base.DatasetSerializationTestBase,
-    parameterized.TestCase):
+    dataset_serialization_test_base.DatasetSerializationTestBase):
 
-  @combinations.generate(test_base.default_test_combinations())
   def testCore(self):
 
     def build_ds(size):
@@ -54,7 +48,6 @@ class ChooseFastestBranchDatasetSerializationTest(
     for size in [100, 1000]:
       self.run_core_tests(lambda: build_ds(size), size // 10)  # pylint: disable=cell-var-from-loop
 
-  @combinations.generate(test_base.default_test_combinations())
   def testWithCapture(self):
 
     def build_ds():
@@ -73,7 +66,6 @@ class ChooseFastestBranchDatasetSerializationTest(
 
     self.run_core_tests(build_ds, 10)
 
-  @combinations.generate(test_base.default_test_combinations())
   def testWithPrefetch(self):
 
     def build_ds():
@@ -92,7 +84,6 @@ class ChooseFastestBranchDatasetSerializationTest(
 
     self.run_core_tests(build_ds, 10)
 
-  @combinations.generate(test_base.default_test_combinations())
   def testWithMoreOutputThanInput(self):
 
     def build_ds():

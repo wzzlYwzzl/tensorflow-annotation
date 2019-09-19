@@ -80,7 +80,5 @@ message AutotuningLog {
   // stream_executor::DeviceDescription::pci_bus_id.
   string device_pci_bus_id = 5;
 
-  string blas_version = 6;
-
-  // Next ID: 7
+  // Next ID: 6
 }

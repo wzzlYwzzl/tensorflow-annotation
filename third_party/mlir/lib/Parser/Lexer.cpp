@@ -106,8 +106,6 @@ Token Lexer::lexToken() {
     return formToken(Token::colon, tokStart);
   case ',':
     return formToken(Token::comma, tokStart);
-  case '.':
-    return lexEllipsis(tokStart);
   case '(':
     return formToken(Token::l_paren, tokStart);
   case ')':
@@ -174,21 +172,33 @@ Token Lexer::lexToken() {
   }
 }
 
-/// Lex an '@foo' identifier.
+/// Lex a comment line, starting with a semicolon.
 ///
-///   symbol-ref-id ::= `@` bare-id
+///   TODO: add a regex for comments here and to the spec.
 ///
-Token Lexer::lexAtIdentifier(const char *tokStart) {
-  // These always start with a letter or underscore.
-  auto cur = *curPtr++;
-  if (!isalpha(cur) && cur != '_')
-    return emitError(curPtr - 1,
-                     "@ identifier expected to start with letter or '_'");
+Token Lexer::lexComment() {
+  // Advance over the second '/' in a '//' comment.
+  assert(*curPtr == '/');
+  ++curPtr;
 
-  while (isalpha(*curPtr) || isdigit(*curPtr) || *curPtr == '_' ||
-         *curPtr == '$' || *curPtr == '.')
-    ++curPtr;
-  return formToken(Token::at_identifier, tokStart);
+  while (true) {
+    switch (*curPtr++) {
+    case '\n':
+    case '\r':
+      // Newline is end of comment.
+      return lexToken();
+    case 0:
+      // If this is the end of the buffer, end the comment.
+      if (curPtr - 1 == curBuffer.end()) {
+        --curPtr;
+        return lexToken();
+      }
+      LLVM_FALLTHROUGH;
+    default:
+      // Skip over other characters.
+      break;
+    }
+  }
 }
 
 /// Lex a bare identifier or keyword that starts with a letter.
@@ -222,47 +232,70 @@ Token Lexer::lexBareIdentifierOrKeyword(const char *tokStart) {
   return Token(kind, spelling);
 }
 
-/// Lex a comment line, starting with a semicolon.
+/// Lex an '@foo' identifier.
 ///
-///   TODO: add a regex for comments here and to the spec.
+///   symbol-ref-id ::= `@` bare-id
 ///
-Token Lexer::lexComment() {
-  // Advance over the second '/' in a '//' comment.
-  assert(*curPtr == '/');
-  ++curPtr;
+Token Lexer::lexAtIdentifier(const char *tokStart) {
+  // These always start with a letter or underscore.
+  auto cur = *curPtr++;
+  if (!isalpha(cur) && cur != '_')
+    return emitError(curPtr - 1,
+                     "@ identifier expected to start with letter or '_'");
 
-  while (true) {
-    switch (*curPtr++) {
-    case '\n':
-    case '\r':
-      // Newline is end of comment.
-      return lexToken();
-    case 0:
-      // If this is the end of the buffer, end the comment.
-      if (curPtr - 1 == curBuffer.end()) {
-        --curPtr;
-        return lexToken();
-      }
-      LLVM_FALLTHROUGH;
-    default:
-      // Skip over other characters.
-      break;
-    }
-  }
+  while (isalpha(*curPtr) || isdigit(*curPtr) || *curPtr == '_' ||
+         *curPtr == '$' || *curPtr == '.')
+    ++curPtr;
+  return formToken(Token::at_identifier, tokStart);
 }
 
-/// Lex an ellipsis.
+/// Lex an identifier that starts with a prefix followed by suffix-id.
 ///
-///   ellipsis ::= '...'
+///   affine-map-id ::= `#` suffix-id
+///   ssa-id        ::= '%' suffix-id
+///   block-id      ::= '^' suffix-id
+///   type-id       ::= '!' suffix-id
+///   suffix-id     ::= digit+ | (letter|id-punct) (letter|id-punct|digit)*
 ///
-Token Lexer::lexEllipsis(const char *tokStart) {
-  assert(curPtr[-1] == '.');
+Token Lexer::lexPrefixedIdentifier(const char *tokStart) {
+  Token::Kind kind;
+  StringRef errorKind;
+  switch (*tokStart) {
+  case '#':
+    kind = Token::hash_identifier;
+    errorKind = "invalid attribute name";
+    break;
+  case '%':
+    kind = Token::percent_identifier;
+    errorKind = "invalid SSA name";
+    break;
+  case '^':
+    kind = Token::caret_identifier;
+    errorKind = "invalid block name";
+    break;
+  case '!':
+    kind = Token::exclamation_identifier;
+    errorKind = "invalid type identifier";
+    break;
+  default:
+    llvm_unreachable("invalid caller");
+  }
 
-  if (curPtr == curBuffer.end() || *curPtr != '.' || *(curPtr + 1) != '.')
-    return emitError(curPtr, "expected three consecutive dots for an ellipsis");
+  // Parse suffix-id.
+  if (isdigit(*curPtr)) {
+    // If suffix-id starts with a digit, the rest must be digits.
+    while (isdigit(*curPtr)) {
+      ++curPtr;
+    }
+  } else if (isalpha(*curPtr) || isPunct(*curPtr)) {
+    do {
+      ++curPtr;
+    } while (isalpha(*curPtr) || isdigit(*curPtr) || isPunct(*curPtr));
+  } else {
+    return emitError(curPtr - 1, errorKind);
+  }
 
-  curPtr += 2;
-  return formToken(Token::ellipsis, tokStart);
+  return formToken(kind, tokStart);
 }
 
 /// Lex a number literal.
@@ -309,56 +342,6 @@ Token Lexer::lexNumber(const char *tokStart) {
     }
   }
   return formToken(Token::floatliteral, tokStart);
-}
-
-/// Lex an identifier that starts with a prefix followed by suffix-id.
-///
-///   affine-map-id ::= `#` suffix-id
-///   ssa-id        ::= '%' suffix-id
-///   block-id      ::= '^' suffix-id
-///   type-id       ::= '!' suffix-id
-///   suffix-id     ::= digit+ | (letter|id-punct) (letter|id-punct|digit)*
-///   id-punct      ::= `$` | `.` | `_` | `-`
-///
-Token Lexer::lexPrefixedIdentifier(const char *tokStart) {
-  Token::Kind kind;
-  StringRef errorKind;
-  switch (*tokStart) {
-  case '#':
-    kind = Token::hash_identifier;
-    errorKind = "invalid attribute name";
-    break;
-  case '%':
-    kind = Token::percent_identifier;
-    errorKind = "invalid SSA name";
-    break;
-  case '^':
-    kind = Token::caret_identifier;
-    errorKind = "invalid block name";
-    break;
-  case '!':
-    kind = Token::exclamation_identifier;
-    errorKind = "invalid type identifier";
-    break;
-  default:
-    llvm_unreachable("invalid caller");
-  }
-
-  // Parse suffix-id.
-  if (isdigit(*curPtr)) {
-    // If suffix-id starts with a digit, the rest must be digits.
-    while (isdigit(*curPtr)) {
-      ++curPtr;
-    }
-  } else if (isalpha(*curPtr) || isPunct(*curPtr)) {
-    do {
-      ++curPtr;
-    } while (isalpha(*curPtr) || isdigit(*curPtr) || isPunct(*curPtr));
-  } else {
-    return emitError(curPtr - 1, errorKind);
-  }
-
-  return formToken(kind, tokStart);
 }
 
 /// Lex a string literal.

@@ -30,7 +30,7 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/random/random.h"
-#include "tensorflow/core/protobuf/remote_tensor_handle.pb.h"
+#include "tensorflow/core/protobuf/eager_service.pb.h"
 #include "tensorflow/core/protobuf/tensorflow_server.pb.h"
 
 namespace tensorflow {
@@ -286,16 +286,15 @@ XrtTensorHandle XrtTfContext::SendTensor(
     op_id = op->id;
   }
 
-  eager::EnqueueRequest request;
+  eager::SendTensorRequest request;
   request.set_context_id(context_id_);
-  auto* send_tensor = request.add_queue()->mutable_send_tensor();
-  send_tensor->set_op_id(op_id);
-  send_tensor->mutable_tensors()->AddAllocated(tensor_proto.release());
-  send_tensor->set_device_name(devices_.at(rpc_device_id).name());
-  auto response = std::make_shared<eager::EnqueueResponse>();
+  request.set_op_id(op_id);
+  request.mutable_tensors()->AddAllocated(tensor_proto.release());
+  request.set_device_name(devices_.at(rpc_device_id).name());
+  auto response = std::make_shared<eager::SendTensorResponse>();
   auto context_ptr = shared_from_this();
   absl::Notification done;
-  eager_client_->EnqueueAsync(
+  eager_client_->SendTensorAsync(
       &request, response.get(),
       [context_ptr, op_id, response, &done](Status status) {
         absl::MutexLock lock(&context_ptr->mu_);

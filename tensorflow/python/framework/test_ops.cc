@@ -102,13 +102,13 @@ class KernelLabelOp : public OpKernel {
                    ctx->allocate_output("result", TensorShape({}), &output));
     switch (KL) {
       case DEFAULT_LABEL:
-        output->scalar<tstring>()() = "My label is: default";
+        output->scalar<string>()() = "My label is: default";
         break;
       case OVERLOAD_1_LABEL:
-        output->scalar<tstring>()() = "My label is: overload_1";
+        output->scalar<string>()() = "My label is: overload_1";
         break;
       case OVERLOAD_2_LABEL:
-        output->scalar<tstring>()() = "My label is: overload_2";
+        output->scalar<string>()() = "My label is: overload_2";
         break;
     }
   }
@@ -682,7 +682,7 @@ class DevicePlacementOp : public OpKernel {
     Tensor* output;
     OP_REQUIRES_OK(ctx,
                    ctx->allocate_output("device", TensorShape({}), &output));
-    output->scalar<tstring>()() = ctx->device()->name();
+    output->scalar<string>()() = ctx->device()->name();
   }
 };
 

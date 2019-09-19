@@ -229,8 +229,7 @@ class UnliftedInitializerVariable(resource_variable_ops.UninitializedVariable):
         # Init scope is eager but current scope is graph. We will lift out this
         # variable by addint it into "add_initializers_to".
         if add_initializers_to is not None:
-          add_initializers_to.append((self, initial_value))
-
+          add_initializers_to[self] = initial_value
         def assign_fn():
           with ops.name_scope("Assign") as n, ops.colocate_with(self._handle):
             resource_variable_ops.assign_variable_op(
@@ -300,8 +299,7 @@ class Function(object):
                input_signature=None,
                autograph=True,
                experimental_autograph_options=None,
-               experimental_relax_shapes=False,
-               experimental_compile=None):
+               experimental_relax_shapes=False):
     """Initializes a `Function`.
 
     Args:
@@ -317,19 +315,6 @@ class Function(object):
         conversion options when autograph is set to True.
       experimental_relax_shapes: When true, argument shapes may be relaxed to
         avoid unecessary retracing.
-      experimental_compile: If false, execute the function in a regular way. The
-        function is optimized by some graph rewrite passes (some ops might be
-        clustered into a single op) and interpreted by the standard TensorFlow
-        executor, which dispatches op kernels one by one as they become
-        executable. Set it to false when directly running a multi-device
-        function on TPUs (e.g. two TPU cores, one TPU core and its
-        host CPU). If True, the function is compiled directly by XLA. XLA would
-        fuse all the ops and emit more efficient code to run for some devices
-        (e.g. TPU, XLA_GPU) and some use cases (e.g. dense tensor computation).
-        It requires that the whole function is compilable by XLA. If None
-        (default), compile the function with XLA when running on TPU and go
-        through the regular function execution path when running on other
-        devices.
 
     Raises:
       ValueError: if `input_signature` is not None and the `python_function`'s
@@ -342,7 +327,6 @@ class Function(object):
     self._autograph = autograph
     self._experimental_autograph_options = experimental_autograph_options
     self.experimental_relax_shapes = experimental_relax_shapes
-    self._experimental_compile = experimental_compile
     self._created_variables = None  # GUARDED_BY(self._lock)
     self._stateful_fn = None  # GUARDED_BY(self._lock)
     self._stateless_fn = None  # GUARDED_BY(self._lock)
@@ -380,16 +364,9 @@ class Function(object):
 
   def _defun(self, fn):
     """Returns a defun generated from the input function."""
-    attributes = None
-    if self._experimental_compile is not None:
-      if self._experimental_compile:
-        attributes = {"_XlaCompile": True}
-      else:
-        attributes = {"_XlaCompile": False}
-    return function_lib.defun_with_attributes(
+    return function_lib.defun(
         fn,
         input_signature=self.input_signature,
-        attributes=attributes,
         autograph=self._autograph,
         experimental_autograph_options=self._experimental_autograph_options,
         experimental_relax_shapes=self.experimental_relax_shapes)
@@ -522,8 +499,8 @@ class Function(object):
 
     try:
       # This is the first call of __call__, so we have to initialize.
-      initializers = []
-      self._initialize(args, kwds, add_initializers_to=initializers)
+      initializer_map = object_identity.ObjectIdentityDictionary()
+      self._initialize(args, kwds, add_initializers_to=initializer_map)
     finally:
       # At this point we know that the initialization is complete (or less
       # interestingly an exception was raised) so we no longer need a lock.
@@ -534,7 +511,7 @@ class Function(object):
         # Attempt to initialize variables eagerly and without conds by lifting
         # out initialization graphs. This is the only initialization strategy
         # compatible with XLA at the moment.
-        self._initialize_uninitialized_variables(initializers)
+        self._initialize_uninitialized_variables(initializer_map)
       except lift_to_graph.UnliftableError:
         pass  # Fall through to cond-based initialization.
       else:
@@ -619,14 +596,14 @@ class Function(object):
   def function_spec(self):
     return self._function_spec
 
-  def _initialize_uninitialized_variables(self, initializers):
+  def _initialize_uninitialized_variables(self, initializer_map):
     """Make and call a `ConcreteFunction` which initializes variables."""
 
     # Note: using defun here avoids an infinite recursion.
     @function_lib.defun
     def initialize_variables():
       op_map = object_identity.ObjectIdentityDictionary()
-      for v, init in initializers:
+      for v, init in initializer_map.items():
         with ops.init_scope():
           if resource_variable_ops.var_is_initialized_op(v.handle):
             # Ignore variables which are already initialized at trace time.
@@ -667,13 +644,13 @@ class Function(object):
             "has been used")
       # Here we trace the function, collect the initializers, and attempt to
       # extract them and run them eagerly. Fail only if we cannot do so.
-      initializers = []
-      self._initialize(args, kwargs, add_initializers_to=initializers)
+      initializer_map = object_identity.ObjectIdentityDictionary()
+      self._initialize(args, kwargs, add_initializers_to=initializer_map)
 
     # Note: using defun here avoids an infinite recursion.
     @function_lib.defun
     def initialize_variables():
-      for v, init in initializers:
+      for v, init in initializer_map.items():
         v.assign(lift_to_graph.lift_to_graph(
             [init], ops.get_default_graph())[init])
 
@@ -795,9 +772,9 @@ class Function(object):
     """
     with self._lock:
       if self._stateful_fn is None:
-        initializers = []
-        self._initialize(args, kwargs, add_initializers_to=initializers)
-        self._initialize_uninitialized_variables(initializers)
+        initializer_map = object_identity.ObjectIdentityDictionary()
+        self._initialize(args, kwargs, add_initializers_to=initializer_map)
+        self._initialize_uninitialized_variables(initializer_map)
 
     if self._created_variables:
       # In this case we have created variables on the first call, so we run the
@@ -845,8 +822,7 @@ def function(func=None,
              input_signature=None,
              autograph=True,
              experimental_autograph_options=None,
-             experimental_relax_shapes=False,
-             experimental_compile=None):
+             experimental_relax_shapes=False):
   """Creates a callable TensorFlow graph from a Python function.
 
   `function` constructs a callable that executes a TensorFlow graph
@@ -1103,21 +1079,6 @@ def function(func=None,
       autograph=True.
     experimental_relax_shapes: When true, argument shapes may be relaxed to
       avoid unecessary retracing.
-    experimental_compile: If false, execute the function in a regular way. The
-      function is optimized by some graph rewrite passes (some ops might be
-      clustered into a single op) and interpreted by the standard TensorFlow
-      executor, which dispatches op kernels one by one as they become
-      executable. Set it to false when directly running a multi-device function
-      on TPUs (e.g. two TPU cores, one TPU core and its host CPU). If True, the
-      function is compiled directly by XLA (https://www.tensorflow.org/xla).
-      XLA would fuse all the ops and emit more efficient code to run for some
-      devices (e.g. TPU, XLA_GPU) and some use cases (e.g. dense tensor
-      computation). It requires that the whole function is compilable by XLA
-      (e.g. static tensor shape, a subset of operations, no string, compile-time
-      constant input, etc). If None (default), compile the function with XLA
-      when running on TPU and go through the regular function execution path
-      when running on other devices. Note: TensorArrays on TPU don't work with
-      standard TensorFlow executor.
 
   Returns:
      If `func` is not None, returns a callable that will execute the compiled
@@ -1145,8 +1106,7 @@ def function(func=None,
             input_signature=input_signature,
             autograph=autograph,
             experimental_autograph_options=experimental_autograph_options,
-            experimental_relax_shapes=experimental_relax_shapes,
-            experimental_compile=experimental_compile))
+            experimental_relax_shapes=experimental_relax_shapes))
 
   # This code path is for the `foo = tf.function(foo, ...)` use case
   if func is not None:

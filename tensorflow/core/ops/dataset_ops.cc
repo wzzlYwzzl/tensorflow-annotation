@@ -168,7 +168,6 @@ REGISTER_OP("PrefetchDataset")
     .Attr("output_types: list(type) >= 1")
     .Attr("output_shapes: list(shape) >= 1")
     .Attr("slack_period: int = 0")
-    .Attr("legacy_autotune: bool = true")
     .SetShapeFn([](shape_inference::InferenceContext* c) {
       shape_inference::ShapeHandle unused;
       // buffer_size should be a scalar.
@@ -705,8 +704,6 @@ REGISTER_OP("DeserializeIterator")
 
 REGISTER_OP("DatasetToGraph")
     .Input("input_dataset: variant")
-    .Attr("stateful_whitelist: list(string) >= 0 = []")
-    .Attr("allow_stateful: bool = false")
     .Output("graph: string")
     .SetShapeFn(shape_inference::ScalarShape);
 

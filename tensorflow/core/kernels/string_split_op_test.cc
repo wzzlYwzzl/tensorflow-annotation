@@ -57,7 +57,7 @@ const char* lines[] = {
 Tensor GetTestTensor(int batch) {
   const int sz = TF_ARRAYSIZE(lines);
   Tensor t(DT_STRING, {batch});
-  auto s = t.flat<tstring>();
+  auto s = t.flat<string>();
   for (int i = 0; i < batch; ++i) {
     s(i) = lines[i % sz];
   }
@@ -67,7 +67,7 @@ Tensor GetTestTensor(int batch) {
 Graph* SetupStringSplitGraph(const Tensor& input) {
   Graph* g = new Graph(OpRegistry::Global());
   Tensor delim(DT_STRING, TensorShape({}));
-  delim.flat<tstring>().setConstant(" ");
+  delim.flat<string>().setConstant(" ");
 
   TF_CHECK_OK(NodeBuilder("string_split_op", "StringSplit")
                   .Input(test::graph::Constant(g, input))
@@ -98,7 +98,7 @@ BENCHMARK(BM_StringSplit)
 Graph* SetupStringSplitV2Graph(const Tensor& input) {
   Graph* g = new Graph(OpRegistry::Global());
   Tensor sep(DT_STRING, TensorShape({}));
-  sep.flat<tstring>().setConstant(" ");
+  sep.flat<string>().setConstant(" ");
 
   TF_CHECK_OK(NodeBuilder("string_split_op", "StringSplitV2")
                   .Input(test::graph::Constant(g, input))

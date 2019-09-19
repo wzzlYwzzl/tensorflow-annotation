@@ -22,12 +22,14 @@ from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.distribute import distributed_training_utils
 from tensorflow.python.keras.optimizer_v2 import adam
 from tensorflow.python.platform import test
+from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.training import adam as v1_adam
 
 
 class DistributedTrainingUtilsTest(test.TestCase):
 
-  def test_validate_callbacks_predefined_callbacks(self):
+  @test.mock.patch.object(logging, 'warning', autospec=True)
+  def test_validate_callbacks_predefined_callbacks(self, mock_warning):
     supported_predefined_callbacks = [
         callbacks.TensorBoard(),
         callbacks.CSVLogger(filename='./log.csv'),
@@ -52,6 +54,8 @@ class DistributedTrainingUtilsTest(test.TestCase):
           ValueError, 'You must specify a Keras Optimizer V2'):
         distributed_training_utils.validate_callbacks([callback],
                                                       v1_adam.AdamOptimizer())
+
+    self.assertEqual(0, mock_warning.call_count)
 
 
 if __name__ == '__main__':

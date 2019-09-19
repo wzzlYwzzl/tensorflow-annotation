@@ -15,8 +15,8 @@ limitations under the License.
 
 #include "tensorflow/compiler/mlir/xla/xla_mlir_translate.h"
 
-#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/ToolOutputFile.h"
 #include "mlir/IR/Module.h"  // TF:local_config_mlir
 #include "mlir/Translation.h"  // TF:local_config_mlir
 #include "tensorflow/compiler/mlir/xla/hlo_to_mlir_hlo.h"
@@ -29,18 +29,6 @@ limitations under the License.
 
 using stream_executor::port::Status;
 using stream_executor::port::StatusOr;  // NOLINT TODO(b/130822468) fix this
-
-// NOLINTNEXTLINE
-static llvm::cl::opt<bool> emit_use_tuple_arg(
-    "emit-use-tuple-args",
-    llvm::cl::desc("Emit HLO modules using tuples as args"),
-    llvm::cl::init(false));
-
-// NOLINTNEXTLINE
-static llvm::cl::opt<bool> emit_always_return_tuple(
-    "emit-always-return-tuple",
-    llvm::cl::desc("Emit HLO modules always return tuple"),
-    llvm::cl::init(false));
 
 namespace xla {
 
@@ -64,12 +52,18 @@ bool LoadHloProto(const std::string& contents, HloProto* hlo_proto) {
 }  // namespace
 
 mlir::OwningModuleRef HloToMlirHloTranslateFunction(
-    std::unique_ptr<llvm::MemoryBuffer> input, mlir::MLIRContext* context) {
+    llvm::StringRef input_filename, mlir::MLIRContext* context) {
+  auto file_or_err = llvm::MemoryBuffer::getFileOrSTDIN(input_filename.str());
+  if (std::error_code error = file_or_err.getError()) {
+    LOG(ERROR) << "Failure to read HLO module: " << error;
+    return nullptr;
+  }
+
+  auto& input_file = *file_or_err;
   HloProto hlo_proto;
-  string content(input->getBufferStart(), input->getBufferSize());
+  string content(input_file->getBufferStart(), input_file->getBufferSize());
   if (!LoadHloProto(content, &hlo_proto)) {
-    LOG(ERROR) << "Failed to load proto: "
-               << input->getBufferIdentifier().str();
+    LOG(ERROR) << "Failed to load proto: " << input_filename.str();
     return nullptr;
   }
 
@@ -86,9 +80,16 @@ mlir::OwningModuleRef HloToMlirHloTranslateFunction(
 }
 
 mlir::OwningModuleRef HloTextToMlirHloTranslateFunction(
-    std::unique_ptr<llvm::MemoryBuffer> input, mlir::MLIRContext* context) {
+    llvm::StringRef input_filename, mlir::MLIRContext* context) {
+  auto file_or_err = llvm::MemoryBuffer::getFileOrSTDIN(input_filename.str());
+  if (std::error_code error = file_or_err.getError()) {
+    LOG(ERROR) << "Failure to open file: " << error;
+    return nullptr;
+  }
+
+  auto& input_file = *file_or_err;
   HloProto hlo_proto;
-  string content(input->getBufferStart(), input->getBufferSize());
+  string content(input_file->getBufferStart(), input_file->getBufferSize());
 
   auto hlo_module_error = ParseAndReturnUnverifiedModule(content);
   if (!hlo_module_error.ok()) {
@@ -109,18 +110,26 @@ mlir::OwningModuleRef HloTextToMlirHloTranslateFunction(
 }
 
 static mlir::LogicalResult MlirHloToHloTranslateFunction(
-    mlir::ModuleOp module, llvm::raw_ostream& output) {
+    mlir::ModuleOp module, llvm::StringRef output_filename) {
   if (!module) return mlir::failure();
 
+  std::error_code error;
+  auto result = llvm::make_unique<llvm::ToolOutputFile>(output_filename, error,
+                                                        llvm::sys::fs::F_None);
+  if (error) {
+    LOG(ERROR) << error.message();
+    return mlir::failure();
+  }
+
   HloProto hloProto;
-  Status status = mlir::ConvertMlirHloToHlo(
-      module, &hloProto, emit_use_tuple_arg, emit_always_return_tuple);
+  Status status = mlir::ConvertMlirHloToHlo(module, &hloProto);
   if (!status.ok()) {
     LOG(ERROR) << "Module conversion failed: " << status;
     return mlir::failure();
   }
 
-  output << hloProto.DebugString();
+  result->os() << hloProto.DebugString();
+  result->keep();
   return mlir::success();
 }
 
@@ -134,12 +143,19 @@ static StatusOr<std::unique_ptr<HloModule>> HloModuleFromProto(
 }
 
 static mlir::LogicalResult MlirHloToHloTextTranslateFunction(
-    mlir::ModuleOp module, llvm::raw_ostream& output) {
+    mlir::ModuleOp module, llvm::StringRef output_filename) {
   if (!module) return mlir::failure();
 
+  std::error_code error;
+  auto result = llvm::make_unique<llvm::ToolOutputFile>(output_filename, error,
+                                                        llvm::sys::fs::F_None);
+  if (error) {
+    LOG(ERROR) << error.message();
+    return mlir::failure();
+  }
+
   HloProto hloProto;
-  Status status = mlir::ConvertMlirHloToHlo(
-      module, &hloProto, emit_use_tuple_arg, emit_always_return_tuple);
+  Status status = mlir::ConvertMlirHloToHlo(module, &hloProto);
   if (!status.ok()) {
     LOG(ERROR) << "Module conversion failed: " << status;
     return mlir::failure();
@@ -153,10 +169,11 @@ static mlir::LogicalResult MlirHloToHloTextTranslateFunction(
     return mlir::failure();
   }
 
-  output << statusOrHloModule.ValueOrDie()->ToString(
+  result->os() << statusOrHloModule.ValueOrDie()->ToString(
       HloPrintOptions()
           // We don't interpret or use layouts
           .set_include_layout_in_shapes(false));
+  result->keep();
   return mlir::success();
 }
 

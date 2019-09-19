@@ -16,8 +16,6 @@ limitations under the License.
 #ifndef TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_EAGER_REMOTE_EXECUTE_NODE_H_
 #define TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_EAGER_REMOTE_EXECUTE_NODE_H_
 
-#include <cstddef>
-
 #include "absl/types/span.h"
 #include "tensorflow/core/common_runtime/eager/eager_executor.h"
 #include "tensorflow/core/common_runtime/eager/tensor_handle.h"
@@ -29,13 +27,13 @@ namespace eager {
 
 // RemoteExecuteNode is an implementation of EagerNode which enqueues
 // an operation via RPC in a remote EagerService.
-class RemoteExecuteNode : public AsyncEagerNode {
+class RemoteExecuteNode : public EagerNode {
  public:
   RemoteExecuteNode(std::unique_ptr<EnqueueRequest> request, Device* device,
                     EagerClient* eager_client,
                     const gtl::InlinedVector<TensorHandle*, 4>& inputs,
                     absl::Span<TensorHandle*> retvals)
-      : AsyncEagerNode(),
+      : EagerNode(),
         request_(std::move(request)),
         device_(device),
         eager_client_(eager_client),
@@ -54,29 +52,47 @@ class RemoteExecuteNode : public AsyncEagerNode {
     }
   }
 
-  ~RemoteExecuteNode() override {
+  Status Run() override {
+    EnqueueResponse response;
+    Status status;
+    Notification n;
+    eager_client_->EnqueueAsync(request_.get(), &response,
+                                [&n, &status](const Status& s) {
+                                  status.Update(s);
+                                  n.Notify();
+                                });
+    n.WaitForNotification();
+
+    if (!status.ok()) {
+      Abort(status);
+      return status;
+    }
+
+    for (int i = 0; i < retvals_.size(); i++) {
+      Status s = retvals_[i]->SetRemoteShape(
+          response.queue_response(0).shape(i), device_);
+      if (!s.ok()) {
+        retvals_[i]->Poison(s);
+      }
+      retvals_[i]->Unref();
+    }
+
+    for (auto handle : inputs_) {
+      handle->Unref();
+    }
+
+    return status;
+  }
+
+  void Abort(Status status) override {
     for (auto handle : retvals_) {
+      handle->Poison(status);
       handle->Unref();
     }
 
     for (auto handle : inputs_) {
       handle->Unref();
     }
-  }
-
-  void RunAsync(StatusCallback done) override;
-
-  void Abort(Status status) override {
-    for (auto handle : retvals_) {
-      handle->Poison(status);
-    }
-  }
-
-  string DebugString() const override {
-    string out = "[RemoteExecuteNode]";
-    strings::StrAppend(&out, " request: ", request_->DebugString());
-    strings::StrAppend(&out, ", target_device: ", device_->name());
-    return out;
   }
 
  private:

@@ -21,12 +21,18 @@
 
 #include "mlir/Analysis/LoopAnalysis.h"
 
+#include "mlir/AffineOps/AffineOps.h"
 #include "mlir/Analysis/AffineAnalysis.h"
 #include "mlir/Analysis/AffineStructures.h"
 #include "mlir/Analysis/NestedMatcher.h"
-#include "mlir/Dialect/AffineOps/AffineOps.h"
-#include "mlir/Dialect/VectorOps/VectorOps.h"
+#include "mlir/Analysis/VectorAnalysis.h"
+#include "mlir/IR/AffineMap.h"
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/Operation.h"
+#include "mlir/StandardOps/Ops.h"
+#include "mlir/Support/Functional.h"
 #include "mlir/Support/MathExtras.h"
+#include "mlir/VectorOps/VectorOps.h"
 
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SmallString.h"
@@ -43,7 +49,7 @@ using namespace mlir;
 // pure analysis method relying on FlatAffineConstraints; the latter will also
 // be more powerful (since both inequalities and equalities will be considered).
 void mlir::buildTripCountMapAndOperands(
-    AffineForOp forOp, AffineMap *tripCountMap,
+    AffineForOp forOp, AffineMap *map,
     SmallVectorImpl<Value *> *tripCountOperands) {
   int64_t loopSpan;
 
@@ -56,39 +62,48 @@ void mlir::buildTripCountMapAndOperands(
     loopSpan = ub - lb;
     if (loopSpan < 0)
       loopSpan = 0;
-    *tripCountMap = b.getConstantAffineMap(ceilDiv(loopSpan, step));
+    *map = b.getConstantAffineMap(ceilDiv(loopSpan, step));
     tripCountOperands->clear();
     return;
   }
   auto lbMap = forOp.getLowerBoundMap();
   auto ubMap = forOp.getUpperBoundMap();
   if (lbMap.getNumResults() != 1) {
-    *tripCountMap = AffineMap();
+    *map = AffineMap();
     return;
   }
   SmallVector<Value *, 4> lbOperands(forOp.getLowerBoundOperands());
   SmallVector<Value *, 4> ubOperands(forOp.getUpperBoundOperands());
+  auto lb = b.create<AffineApplyOp>(forOp.getLoc(), lbMap, lbOperands);
+  SmallVector<Value *, 4> ubs;
+  ubs.reserve(ubMap.getNumResults());
+  for (auto ubExpr : ubMap.getResults())
+    ubs.push_back(b.create<AffineApplyOp>(
+        forOp.getLoc(),
+        b.getAffineMap(ubMap.getNumDims(), ubMap.getNumSymbols(), {ubExpr}),
+        ubOperands));
 
-  // Difference of each upper bound expression from the single lower bound
-  // expression (divided by the step) provides the expressions for the trip
-  // count map.
-  AffineValueMap ubValueMap(ubMap, ubOperands);
+  tripCountOperands->clear();
+  tripCountOperands->reserve(1 + ubs.size());
+  tripCountOperands->push_back(lb);
+  tripCountOperands->append(ubs.begin(), ubs.end());
 
-  SmallVector<AffineExpr, 4> lbSplatExpr(ubValueMap.getNumResults(),
-                                         lbMap.getResult(0));
-  auto lbMapSplat =
-      b.getAffineMap(lbMap.getNumDims(), lbMap.getNumSymbols(), lbSplatExpr);
-  AffineValueMap lbSplatValueMap(lbMapSplat, lbOperands);
+  SmallVector<AffineExpr, 4> tripCountExprs(ubs.size());
+  for (unsigned i = 0, e = ubs.size(); i < e; i++)
+    tripCountExprs[i] =
+        (b.getAffineDimExpr(1 + i) - b.getAffineDimExpr(0)).ceilDiv(step);
+  *map = b.getAffineMap(1 + ubs.size(), 0, tripCountExprs);
 
-  AffineValueMap tripCountValueMap;
-  AffineValueMap::difference(ubValueMap, lbSplatValueMap, &tripCountValueMap);
-  for (unsigned i = 0, e = tripCountValueMap.getNumResults(); i < e; ++i)
-    tripCountValueMap.setResult(i,
-                                tripCountValueMap.getResult(i).ceilDiv(step));
-
-  *tripCountMap = tripCountValueMap.getAffineMap();
-  tripCountOperands->assign(tripCountValueMap.getOperands().begin(),
-                            tripCountValueMap.getOperands().end());
+  fullyComposeAffineMapAndOperands(map, tripCountOperands);
+  *map = simplifyAffineMap(*map);
+  canonicalizeMapAndOperands(map, tripCountOperands);
+  // Remove any affine.apply's that became dead as a result of composition,
+  // simplification, and canonicalization above.
+  for (auto *v : ubs)
+    if (v->use_empty())
+      v->getDefiningOp()->erase();
+  if (lb.use_empty())
+    lb.erase();
 }
 
 /// Returns the trip count of the loop if it's a constant, None otherwise. This
@@ -236,7 +251,7 @@ static bool isContiguousAccess(Value *iv, LoadOrStoreOp memoryOp,
 
   int uniqueVaryingIndexAlongIv = -1;
   auto accessMap = memoryOp.getAffineMap();
-  SmallVector<Value *, 4> mapOperands(memoryOp.getMapOperands());
+  SmallVector<Value *, 4> mapOperands(memoryOp.getIndices());
   unsigned numDims = accessMap.getNumDims();
   for (unsigned i = 0, e = memRefType.getRank(); i < e; ++i) {
     // Gather map operands used result expr 'i' in 'exprOperands'.
@@ -274,8 +289,7 @@ static bool isVectorElement(LoadOrStoreOpPointer memoryOp) {
 }
 
 static bool isVectorTransferReadOrWrite(Operation &op) {
-  return isa<vector::VectorTransferReadOp>(op) ||
-         isa<vector::VectorTransferWriteOp>(op);
+  return isa<VectorTransferReadOp>(op) || isa<VectorTransferWriteOp>(op);
 }
 
 using VectorizableOpFun = std::function<bool(AffineForOp, Operation &)>;

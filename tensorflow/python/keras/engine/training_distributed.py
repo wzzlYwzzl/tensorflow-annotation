@@ -281,7 +281,6 @@ def experimental_tpu_fit_loop(model,
     callbacks.on_epoch_end(epoch, epoch_logs)
     if callbacks.model.stop_training:
       break
-  model._successful_loop_finish = True
   callbacks._call_end_hook(mode)
 
   if model._compile_distribution:
@@ -651,7 +650,7 @@ class DistributionSingleWorkerTrainingLoop(training_utils.TrainingLoop):
 
     if dist_utils.is_tpu_strategy(model._distribution_strategy):
       steps_per_epoch = training_utils.infer_steps_for_dataset(
-          model, dataset, steps_per_epoch, epochs, steps_name='steps_per_epoch')
+          dataset, steps_per_epoch, epochs, steps_name='steps_per_epoch')
       if steps_per_epoch is None:
         raise ValueError('Number of steps could not be inferred from the data, '
                          'please pass the steps_per_epoch argument.')
@@ -708,7 +707,7 @@ class DistributionSingleWorkerTrainingLoop(training_utils.TrainingLoop):
 
     if dist_utils.is_tpu_strategy(model._distribution_strategy):
       steps = training_utils.infer_steps_for_dataset(
-          model, dataset, steps, steps_name='steps')
+          dataset, steps, steps_name='steps')
       if steps is None:
         raise ValueError('Number of steps could not be inferred from the data, '
                          'please pass the steps argument.')
@@ -745,7 +744,7 @@ class DistributionSingleWorkerTrainingLoop(training_utils.TrainingLoop):
         allow_partial_batch=True)
     if dist_utils.is_tpu_strategy(model._distribution_strategy):
       steps = training_utils.infer_steps_for_dataset(
-          model, dataset, steps, steps_name='steps')
+          dataset, steps, steps_name='steps')
       if steps is None:
         raise ValueError('Number of steps could not be inferred from the data, '
                          'please pass the steps argument.')
@@ -761,14 +760,13 @@ class DistributionSingleWorkerTrainingLoop(training_utils.TrainingLoop):
         callbacks=callbacks)
 
 
-def _train_with_multi_worker(method):
+def train_with_multi_worker(method):
   """Decorator that handles multi worker training with distribution strategy."""
 
   def wrapper(model, **kwargs):
     def _worker_fn(_):
       callbacks = kwargs.pop('callbacks', None)
-      filtered_callbacks = dist_utils.filter_distributed_callbacks(
-          callbacks, model)
+      filtered_callbacks = dist_utils.filter_distributed_callbacks(callbacks)
       kwargs['callbacks'] = filtered_callbacks
       return method(model, **kwargs)
 
@@ -787,11 +785,11 @@ class DistributionMultiWorkerTrainingLoop(training_utils.TrainingLoop):
     self._single_worker_loop = single_worker_loop
 
   def fit(self, *args, **kwargs):
-    return _train_with_multi_worker(self._single_worker_loop.fit)(
+    return train_with_multi_worker(self._single_worker_loop.fit)(
         *args, **kwargs)
 
   def evaluate(self, *args, **kwargs):
-    return _train_with_multi_worker(self._single_worker_loop.evaluate)(
+    return train_with_multi_worker(self._single_worker_loop.evaluate)(
         *args, **kwargs)
 
   def predict(self, *args, **kwargs):

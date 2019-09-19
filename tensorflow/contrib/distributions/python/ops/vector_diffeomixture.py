@@ -524,7 +524,8 @@ class VectorDiffeomixture(distribution_lib.Distribution):
           parameters=parameters,
           graph_parents=(
               distribution._graph_parents  # pylint: disable=protected-access
-              + [loc_ for loc_ in loc if loc_ is not None]),
+              + [loc_ for loc_ in loc if loc_ is not None]
+              + [p for scale_ in scale for p in scale_.graph_parents]),
           name=name)
 
   @property

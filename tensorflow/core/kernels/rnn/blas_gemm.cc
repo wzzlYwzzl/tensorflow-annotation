@@ -15,15 +15,15 @@ limitations under the License.
 
 #define EIGEN_USE_THREADS
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 #include "tensorflow/core/platform/stream_executor.h"
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/kernels/rnn/blas_gemm.h"
 namespace tensorflow {
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 namespace {
 template <typename T>
 se::DeviceMemory<T> AsDeviceMemory(const T* cuda_memory) {
@@ -32,7 +32,7 @@ se::DeviceMemory<T> AsDeviceMemory(const T* cuda_memory) {
   return typed;
 }
 }  // namespace
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
 namespace functor {
 template <typename T>
@@ -41,7 +41,7 @@ void TensorCuBlasGemm<T>::operator()(OpKernelContext* ctx, bool transa,
                                      float alpha, const T* a, int lda,
                                      const T* b, int ldb, float beta, T* c,
                                      int ldc) {
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
   se::blas::Transpose trans[] = {se::blas::Transpose::kNoTranspose,
                                  se::blas::Transpose::kTranspose};
 

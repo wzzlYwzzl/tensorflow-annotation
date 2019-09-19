@@ -22,32 +22,24 @@
 
 #include "mlir/Transforms/FoldUtils.h"
 
-#include "mlir/Dialect/StandardOps/Ops.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/Operation.h"
+#include "mlir/StandardOps/Ops.h"
 
 using namespace mlir;
 
 /// Given an operation, find the parent region that folded constants should be
 /// inserted into.
-static Region *getInsertionRegion(
-    DialectInterfaceCollection<OpFolderDialectInterface> &interfaces,
-    Operation *op) {
-  while (Region *region = op->getParentRegion()) {
+static Region *getInsertionRegion(Operation *op) {
+  while (Region *region = op->getContainingRegion()) {
     // Insert in this region for any of the following scenarios:
     //  * The parent is unregistered, or is known to be isolated from above.
     //  * The parent is a top-level operation.
-    auto *parentOp = region->getParentOp();
+    auto *parentOp = region->getContainingOp();
     if (!parentOp->isRegistered() || parentOp->isKnownIsolatedFromAbove() ||
         !parentOp->getBlock())
       return region;
-
-    // Otherwise, check if this region is a desired insertion region.
-    auto *interface = interfaces.getInterfaceFor(parentOp);
-    if (LLVM_UNLIKELY(interface && interface->shouldMaterializeInto(region)))
-      return region;
-
     // Traverse up the parent looking for an insertion region.
     op = parentOp;
   }
@@ -127,7 +119,7 @@ void OperationFolder::notifyRemoval(Operation *op) {
   assert(constValue);
 
   // Get the constant map that this operation was uniqued in.
-  auto &uniquedConstants = foldScopes[getInsertionRegion(interfaces, op)];
+  auto &uniquedConstants = foldScopes[getInsertionRegion(op)];
 
   // Erase all of the references to this operation.
   auto type = op->getResult(0)->getType();
@@ -169,12 +161,12 @@ LogicalResult OperationFolder::tryToFold(
 
   // Create a builder to insert new operations into the entry block of the
   // insertion region.
-  auto *insertRegion = getInsertionRegion(interfaces, op);
-  auto &entry = insertRegion->front();
+  auto *insertionRegion = getInsertionRegion(op);
+  auto &entry = insertionRegion->front();
   OpBuilder builder(&entry, entry.begin());
 
   // Get the constant map for the insertion region of this operation.
-  auto &uniquedConstants = foldScopes[insertRegion];
+  auto &uniquedConstants = foldScopes[insertionRegion];
 
   // Create the result constants and replace the results.
   auto *dialect = op->getDialect();

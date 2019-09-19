@@ -73,8 +73,6 @@ class RangeDatasetOp::Dataset : public DatasetBase {
     }
   }
 
-  Status CheckExternalState() const override { return Status::OK(); }
-
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
                             DatasetGraphDefBuilder* b,

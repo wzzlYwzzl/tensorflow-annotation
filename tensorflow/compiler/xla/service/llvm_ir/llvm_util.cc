@@ -513,7 +513,6 @@ llvm::FastMathFlags GetCpuFastMathFlags(const HloModuleConfig& module_config) {
   flags.setNoNaNs(!options.xla_cpu_fast_math_honor_nans());
   flags.setNoInfs(!options.xla_cpu_fast_math_honor_infs());
   flags.setAllowReciprocal(!options.xla_cpu_fast_math_honor_division());
-  flags.setApproxFunc(!options.xla_cpu_fast_math_honor_functions());
   return flags;
 }
 

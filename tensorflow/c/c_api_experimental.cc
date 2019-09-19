@@ -510,6 +510,10 @@ TFE_TensorHandle* TFE_DequeueVariantTensor(TF_Session* session, int tensor_id,
   return createTFEDequeue(ctx, TF_VARIANT, queue, status);
 }
 
+static void CheckOk(TF_Status* status) {
+  CHECK_EQ(TF_GetCode(status), TF_OK) << TF_Message(status);
+}
+
 void TFE_TensorHandlePrintDebugString(TFE_TensorHandle* handle) {
   auto* status = TF_NewStatus();
   if (!TFE_TensorHandleIsConcrete(handle)) {
@@ -1088,10 +1092,6 @@ void TFE_InferShapes(TFE_Op* tfe_op, TF_ShapeAndTypeList* input_shapes,
   std::vector<Tensor> all_input_tensors;
   // Update the vector with information from `input_tensors` if provided.
   if (input_tensors != nullptr) {
-    // Note that we take the address of the elements in `all_input_tensors`
-    // below. Allocate enough space so that no reallocation happens, which will
-    // make the pointers invalid.
-    all_input_tensors.reserve(num_inputs);
     for (int i = 0; i < num_inputs; ++i) {
       if (input_tensors[i] == nullptr) continue;
       all_input_tensors.emplace_back();

@@ -42,13 +42,6 @@ namespace tensorflow {
 namespace {
 using xla::ScopedShapedBuffer;
 using xla::ShapedBuffer;
-
-const char kPossibleNonVariableResourceHintMessage[] =
-    "If the error is similar to `Trying to access resource using the wrong "
-    "type`, this is likely because XLA only accepts Resource Variables as "
-    "inputs by snapshotting their values. Other TensorFlow resource types like "
-    "TensorList/TensorArray/Stack are not supported. Try removing non-variable "
-    "resource inputs to XLA.";
 }  // anonymous namespace
 
 VariableInfo::VariableInfo(int index, Var* var) : index_(index), var_(var) {}
@@ -95,12 +88,7 @@ static Status GetVariableInfosFromCtxInputs(
       [&](int variable_idx) { return &HandleFromInput(ctx, variable_idx); });
 
   std::vector<core::RefCountPtr<Var>> variables;
-
-  Status s = LookupResources(ctx, resource_handles, &variables);
-  if (!s.ok()) {
-    errors::AppendToMessage(&s, kPossibleNonVariableResourceHintMessage);
-    return s;
-  }
+  TF_RETURN_IF_ERROR(LookupResources(ctx, resource_handles, &variables));
 
   result->clear();
   result->reserve(variable_indices.size());
@@ -247,50 +235,9 @@ void XlaComputationLaunchContext::PopulateInputs(
   }
 }
 
-namespace {
-
-bool MustAliasOutput(const xla::HloInputOutputAliasConfig& input_output_alias,
-                     int output_num) {
-  xla::ShapeIndex output_index;
-  if (input_output_alias.shape().IsTuple()) {
-    output_index = {output_num};
-  } else {
-    DCHECK_EQ(output_num, 0)
-        << "output_num must be 0 for non-tuple shapes but is " << output_num;
-    output_index = {};
-  }
-  if (input_output_alias.shape().tuple_shapes_size() == 0) {
-    return false;
-  }
-  return input_output_alias.OutputHasAlias(output_index) &&
-         input_output_alias.GetAliasedParameter(output_index).value().kind ==
-             xla::HloInputOutputAliasConfig::kUserAlias;
-}
-
-}  // namespace
-
-Tensor XlaComputationLaunchContext::MakeOutputTensor(
-    DataType type, const TensorShape& shape, se::DeviceMemoryBase buffer,
-    int output_num, const xla::HloInputOutputAliasConfig& input_output_alias,
-    Allocator* allocator) {
-  bool is_aliased = false;
-  if (MustAliasOutput(input_output_alias, output_num)) {
-    int xla_param = input_output_alias.GetAliasedParameter({output_num})
-                        .value()
-                        .parameter_number;
-    DCHECK(arg_ptrs_[xla_param] != nullptr);
-    buffer = arg_ptrs_[xla_param]->root_buffer();
-    is_aliased = true;
-  }
-  return XlaTensorBuffer::MakeTensor(type, shape,
-                                     /*unref_buffer=*/!is_aliased, buffer,
-                                     allocator);
-}
-
 Status XlaComputationLaunchContext::PopulateOutputs(
     OpKernelContext* ctx, const XlaCompiler::CompilationResult* kernel,
-    ScopedShapedBuffer output, int missing_ctx_input_prefix,
-    const xla::HloInputOutputAliasConfig& input_output_alias) {
+    ScopedShapedBuffer output, int missing_ctx_input_prefix) {
   se::Stream* stream =
       ctx->op_device_context() ? ctx->op_device_context()->stream() : nullptr;
 
@@ -384,15 +331,8 @@ Status XlaComputationLaunchContext::PopulateOutputs(
             << "Invalid input for outputs " << i << ": " << input_index;
         ctx->set_output(i, ctx->input(input_index));
       } else {
-        if (MustAliasOutput(input_output_alias, output_num)) {
-          DCHECK(output.buffer({output_num}).is_null())
-              << "Expected output buffer to be aliased, but it is not nil.";
-        }
+        se::DeviceMemoryBase buffer = output.buffer({output_num});
         if (allocate_xla_tensors_) {
-          if (MustAliasOutput(input_output_alias, output_num)) {
-            return errors::Unimplemented(
-                "Aliasing is not yet supported for allocate_xla_tensors_.");
-          }
           Tensor* output_tensor;
           TF_RETURN_IF_ERROR(ctx->allocate_output(i, shape, &output_tensor));
           XlaTensor* xla_tensor = XlaTensor::FromTensor(output_tensor);
@@ -407,10 +347,8 @@ Status XlaComputationLaunchContext::PopulateOutputs(
             CHECK_EQ(output_tensor->TotalBytes(), 0);
           }
         } else {
-          se::DeviceMemoryBase buffer = output.buffer({output_num});
-          Tensor output_tensor =
-              MakeOutputTensor(ctx->expected_output_dtype(i), shape, buffer,
-                               output_num, input_output_alias, allocator);
+          Tensor output_tensor = XlaTensorBuffer::MakeTensor(
+              ctx->expected_output_dtype(i), shape, buffer, allocator);
           output.set_buffer(se::OwningDeviceMemory(), {output_num});
           ctx->set_output(i, output_tensor);
         }
@@ -458,10 +396,6 @@ Status XlaComputationLaunchContext::PopulateOutputs(
     }
 
     if (allocate_xla_tensors_) {
-      if (MustAliasOutput(input_output_alias, output_num)) {
-        return errors::Unimplemented(
-            "Aliasing is not yet supported for allocate_xla_tensors_.");
-      }
       Tensor output_tensor;
       TF_RETURN_IF_ERROR(
           ctx->allocate_temp(write.type, write.shape, &output_tensor));
@@ -477,9 +411,8 @@ Status XlaComputationLaunchContext::PopulateOutputs(
     } else {
       se::DeviceMemoryBase buffer = output.buffer({output_num});
       output.set_buffer(se::OwningDeviceMemory(), {output_num});
-      Tensor output_tensor =
-          MakeOutputTensor(write.type, write.shape, buffer, output_num,
-                           input_output_alias, allocator);
+      Tensor output_tensor = XlaTensorBuffer::MakeTensor(
+          write.type, write.shape, buffer, allocator);
       *variable_infos[i].var()->tensor() = output_tensor;
     }
     ++output_num;

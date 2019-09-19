@@ -283,7 +283,6 @@ class LocallyConnectedImplementationModeTest(test.TestCase,
       num_epochs = 2
 
       np.random.seed(1)
-      tf_test_util.random_seed.set_seed(1)
       targets = np.random.randint(0, num_classes, (num_samples,))
 
       height = 7
@@ -335,20 +334,17 @@ class LocallyConnectedImplementationModeTest(test.TestCase,
           x=inputs,
           y=targets,
           epochs=num_epochs,
-          batch_size=num_samples,
-          shuffle=False)
+          batch_size=num_samples)
       model_2.fit(
           x=inputs,
           y=targets,
           epochs=num_epochs,
-          batch_size=num_samples,
-          shuffle=False)
+          batch_size=num_samples)
       model_3.fit(
           x=inputs,
           y=targets,
           epochs=num_epochs,
-          batch_size=num_samples,
-          shuffle=False)
+          batch_size=num_samples)
 
       # Compare outputs after a few training steps.
       out_1 = model_1.call(inputs)

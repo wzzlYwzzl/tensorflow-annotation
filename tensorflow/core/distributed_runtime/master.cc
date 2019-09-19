@@ -689,11 +689,13 @@ void Master::MakeCallable(const MakeCallableRequest* req,
     return;
   }
 
-  SchedClosure([session, req, resp, done = std::move(done)]() {
-    Status s = session->MakeCallable(*req, resp);
-    session->Unref();
-    done(s);
-  });
+  SchedClosure(std::bind(
+      [session, req, resp](MyClosure done) {
+        Status s = session->MakeCallable(*req, resp);
+        session->Unref();
+        done(s);
+      },
+      std::move(done)));
 }
 
 void Master::RunCallable(CallOptions* opts, const RunCallableRequest* req,
@@ -710,11 +712,13 @@ void Master::RunCallable(CallOptions* opts, const RunCallableRequest* req,
     return;
   }
 
-  SchedClosure([session, opts, req, resp, done = std::move(done)]() {
-    Status s = session->RunCallable(opts, *req, resp);
-    session->Unref();
-    done(s);
-  });
+  SchedClosure(std::bind(
+      [session, opts, req, resp](MyClosure done) {
+        Status s = session->RunCallable(opts, *req, resp);
+        session->Unref();
+        done(s);
+      },
+      std::move(done)));
 }
 
 void Master::ReleaseCallable(const ReleaseCallableRequest* req,
@@ -725,11 +729,13 @@ void Master::ReleaseCallable(const ReleaseCallableRequest* req,
     return;
   }
 
-  SchedClosure([session, req, resp, done = std::move(done)]() {
-    Status s = session->ReleaseCallable(*req, resp);
-    session->Unref();
-    done(s);
-  });
+  SchedClosure(std::bind(
+      [session, req, resp](MyClosure done) {
+        Status s = session->ReleaseCallable(*req, resp);
+        session->Unref();
+        done(s);
+      },
+      std::move(done)));
 }
 
 }  // end namespace tensorflow

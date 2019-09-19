@@ -17,8 +17,7 @@ limitations under the License.
 
 #include <utility>
 #include <vector>
-
-#include "tensorflow/core/framework/types.pb.h"
+#include "tensorflow/core/framework/types.pb_text.h"
 #include "tensorflow/core/framework/versions.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/gtl/stl_util.h"
@@ -302,7 +301,7 @@ const string TensorSliceReader::DebugString() const {
   if (status().ok()) {
     for (auto e : Tensors()) {
       strings::StrAppend(&shape_str, e.first, " (",
-                         DataType_Name(e.second->type()), ") ",
+                         EnumName_DataType(e.second->type()), ") ",
                          e.second->shape().DebugString());
       // Indicates if a tensor has more than 1 slice (i.e., it's partitioned).
       const int num_slices = e.second->Slices().size();

@@ -1,4 +1,3 @@
-load("//tensorflow/compiler/xla:xla.bzl", "xla_proto_library")
 load(
     "//tensorflow/core/platform:default/build_config.bzl",
     "tf_additional_all_protos",
@@ -72,20 +71,6 @@ tf_proto_library_py(
         "//tensorflow/compiler/xla/service:hlo_proto",
     ],
     visibility = ["//visibility:public"],
-)
-
-xla_proto_library(
-    name = "compile_metadata_proto",
-    srcs = [
-        "compile_metadata.proto",
-    ],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":dynamic_padding_proto_cc",
-        "//tensorflow/compiler/xla:xla_data_proto",
-        "//tensorflow/compiler/xla:xla_proto",
-        "//tensorflow/core:protos_all_cc",
-    ],
 )
 
 tf_pyclif_proto_library(

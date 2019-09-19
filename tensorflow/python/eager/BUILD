@@ -65,8 +65,8 @@ py_library(
         ":core",
         ":def_function",
         ":execute",
+        ":execution_callbacks",
         ":forwardprop",
-        ":forwardprop_util",
         ":function",
         ":graph_only_ops",
         ":monitoring",
@@ -270,9 +270,7 @@ cuda_py_test(
     srcs = ["forwardprop_test.py"],
     additional_deps = [
         ":forwardprop",
-        ":forwardprop_util",
         ":test",
-        "//tensorflow/python/distribute:mirrored_strategy",
     ],
     shard_count = 5,
     xla_enable_strict_auto_jit = True,
@@ -358,9 +356,9 @@ cuda_py_test(
         ":function",
         ":test",
         "@absl_py//absl/testing:parameterized",
-        "//tensorflow/python:clip_ops",
-        "//tensorflow/python:constant_op",
         "//tensorflow/python:data_flow_ops",
+        "//tensorflow/python:constant_op",
+        "//tensorflow/python:clip_ops",
         "//tensorflow/python:dtypes",
         "//tensorflow/python:errors",
         "//tensorflow/python:framework_ops",
@@ -406,6 +404,29 @@ py_library(
         "//tensorflow/python:tensor_shape",
         "//tensorflow/python:util",
         "@six_archive//:six",
+    ],
+)
+
+py_library(
+    name = "execution_callbacks",
+    srcs = ["execution_callbacks.py"],
+    srcs_version = "PY2AND3",
+    visibility = ["//tensorflow:internal"],
+    deps = [
+        ":context",
+        "//tensorflow/python:pywrap_tensorflow",
+        "//third_party/py/numpy",
+    ],
+)
+
+tf_py_test(
+    name = "execution_callbacks_test",
+    srcs = ["execution_callbacks_test.py"],
+    additional_deps = [
+        ":execution_callbacks",
+        "//tensorflow/python:client_testlib",
+        "//tensorflow/python:framework_ops",
+        "//tensorflow/python:math_ops",
     ],
 )
 
@@ -456,7 +477,6 @@ py_library(
         ":context",
         ":core",
         ":execute",
-        ":forwardprop_util",
         ":graph_only_ops",
         ":tape",
         "//tensorflow/python:dtypes",
@@ -477,7 +497,6 @@ py_library(
     srcs_version = "PY2AND3",
     visibility = ["//tensorflow:internal"],
     deps = [
-        ":backprop_util",
         ":context",
         ":execute",
         ":imperative_grad",
@@ -498,17 +517,6 @@ py_library(
 )
 
 py_library(
-    name = "backprop_util",
-    srcs = ["backprop_util.py"],
-    srcs_version = "PY2AND3",
-    visibility = ["//tensorflow:internal"],
-    deps = [
-        "//tensorflow/python:dtypes",
-        "//tensorflow/python:tensor_util",
-    ],
-)
-
-py_library(
     name = "forwardprop",
     srcs = ["forwardprop.py"],
     srcs_version = "PY2AND3",
@@ -517,16 +525,6 @@ py_library(
         "//tensorflow/python:platform",
         "//tensorflow/python:pywrap_tensorflow",
         "//tensorflow/python:util",
-    ],
-)
-
-py_library(
-    name = "forwardprop_util",
-    srcs = ["forwardprop_util.py"],
-    srcs_version = "PY2AND3",
-    visibility = ["//tensorflow:internal"],
-    deps = [
-        "//tensorflow/python:pywrap_tensorflow",
     ],
 )
 
@@ -680,24 +678,6 @@ cuda_py_test(
     ],
 )
 
-cuda_py_test(
-    name = "def_function_xla_jit_test",
-    srcs = ["def_function_xla_jit_test.py"],
-    additional_deps = [
-        ":backprop",
-        ":def_function",
-        "//tensorflow/python:client_testlib",
-        "//tensorflow/python:constant_op",
-        "//tensorflow/python:framework_ops",
-        "//tensorflow/python:resource_variable_ops",
-    ],
-    tags = [
-        "no_mac",
-        "no_windows",
-    ],
-    xla_enabled = True,
-)
-
 tf_xla_py_test(
     name = "def_function_xla_test",
     srcs = ["def_function_xla_test.py"],
@@ -727,7 +707,6 @@ py_library(
         "//tensorflow/python:framework_ops",
         "//tensorflow/python:template",
         "//tensorflow/python:variable_scope",
-        "//tensorflow/python/saved_model:nested_structure_coder",
         "//tensorflow/python/training/tracking:base",
     ],
 )

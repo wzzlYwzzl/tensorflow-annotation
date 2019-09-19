@@ -16,8 +16,8 @@
 // =============================================================================
 
 #include "mlir/Conversion/LoopsToGPU/LoopsToGPUPass.h"
+#include "mlir/AffineOps/AffineOps.h"
 #include "mlir/Conversion/LoopsToGPU/LoopsToGPU.h"
-#include "mlir/Dialect/AffineOps/AffineOps.h"
 #include "mlir/Dialect/LoopOps/LoopOps.h"
 #include "mlir/Pass/Pass.h"
 
@@ -66,14 +66,13 @@ struct ForLoopMapper : public FunctionPass<ForLoopMapper> {
 };
 } // namespace
 
-std::unique_ptr<OpPassBase<FuncOp>>
-mlir::createSimpleLoopsToGPUPass(unsigned numBlockDims,
-                                 unsigned numThreadDims) {
-  return std::make_unique<ForLoopMapper>(numBlockDims, numThreadDims);
+FunctionPassBase *mlir::createSimpleLoopsToGPUPass(unsigned numBlockDims,
+                                                   unsigned numThreadDims) {
+  return new ForLoopMapper(numBlockDims, numThreadDims);
 }
 
 static PassRegistration<ForLoopMapper>
     registration(PASS_NAME, "Convert top-level loops to GPU kernels", [] {
-      return std::make_unique<ForLoopMapper>(clNumBlockDims.getValue(),
-                                             clNumThreadDims.getValue());
+      return new ForLoopMapper(clNumBlockDims.getValue(),
+                               clNumThreadDims.getValue());
     });

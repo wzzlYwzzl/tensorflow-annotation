@@ -87,8 +87,6 @@ cuda_py_test(
         "multi_and_single_gpu",
         "no_oss",  # TODO(b/133330625)
     ],
-    # TODO(b/141096229): Find problem with AssignAddVariableOps
-    xla_enable_strict_auto_jit = False,
 )
 
 py_library(
@@ -208,7 +206,6 @@ cuda_py_test(
     ],
     tags = [
         "multi_and_single_gpu",
-        "noguitar",  # b/139307796
     ],
 )
 
@@ -276,7 +273,6 @@ distribute_py_test(
         "no_windows_gpu",
         "notsan",
     ],
-    xla_enable_strict_auto_jit = False,  # Ignoring due to in contrib.
     deps = [
         ":mirrored_strategy",
         "//tensorflow/python/distribute:tpu_strategy",

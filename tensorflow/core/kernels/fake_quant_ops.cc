@@ -21,11 +21,10 @@ limitations under the License.
 #endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #include "tensorflow/core/kernels/fake_quant_ops_functor.h"
-// Above is the related header but clang tidy doesn't recognize it.
+
 #include "tensorflow/core/framework/numeric_op.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/lib/core/errors.h"
-#include "tensorflow/core/lib/monitoring/gauge.h"
 #include "tensorflow/core/platform/protobuf.h"
 
 using tensorflow::BinaryElementWiseOp;
@@ -46,12 +45,6 @@ using tensorflow::errors::InvalidArgument;
 namespace tensorflow {
 
 typedef Eigen::ThreadPoolDevice CPUDevice;
-
-auto* using_fake_quant = monitoring::Gauge<bool, 0>::New(
-    "/tensorflow/api/op/using_fake_quantization",
-    "True if a fake_quant op is created.");
-
-#define SET_USING_FAKE_QUANT() using_fake_quant->GetCell()->Set(true)
 
 namespace {
 bool IsNumBitsValid(int num_bits) { return num_bits >= 2 && num_bits <= 16; }
@@ -81,7 +74,6 @@ class FakeQuantWithMinMaxArgsOp
     OP_REQUIRES_OK(context, context->GetAttr("narrow_range", &narrow_range));
     quant_min_ = narrow_range ? 1 : 0;
     quant_max_ = (1 << num_bits) - 1;
-    SET_USING_FAKE_QUANT();
   }
 
   void Operate(OpKernelContext* context, const Tensor& input, Tensor* output) {
@@ -195,7 +187,6 @@ class FakeQuantWithMinMaxVarsOp : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("narrow_range", &narrow_range));
     quant_min_ = narrow_range ? 1 : 0;
     quant_max_ = (1 << num_bits) - 1;
-    SET_USING_FAKE_QUANT();
   }
 
   void Compute(OpKernelContext* context) override {
@@ -326,7 +317,6 @@ class FakeQuantWithMinMaxVarsPerChannelOp : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("narrow_range", &narrow_range));
     quant_min_ = narrow_range ? 1 : 0;
     quant_max_ = (1 << num_bits) - 1;
-    SET_USING_FAKE_QUANT();
   }
 
   void Compute(OpKernelContext* context) override {

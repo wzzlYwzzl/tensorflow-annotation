@@ -22,9 +22,8 @@ namespace tensorflow {
 class TestEagerOpRewrite : public EagerOpRewrite {
  public:
   TestEagerOpRewrite(string name, string file, string line)
-      : EagerOpRewrite(name, file, line), executor_(/*async=*/false) {}
+      : EagerOpRewrite(name, file, line) {}
   static int count_;
-  EagerExecutor executor_;
   Status Run(EagerOperation* orig_op,
              std::unique_ptr<tensorflow::EagerOperation>* out_op) override {
     ++count_;
@@ -34,8 +33,8 @@ class TestEagerOpRewrite : public EagerOpRewrite {
     TF_RETURN_IF_ERROR(
         tensorflow::AttrTypeMapForOp(kNewOp.c_str(), &types, &is_function));
     // Create a new NoOp Eager operation.
-    out_op->reset(new tensorflow::EagerOperation(
-        nullptr, kNewOp.c_str(), is_function, types, &executor_));
+    out_op->reset(new tensorflow::EagerOperation(nullptr, kNewOp.c_str(),
+                                                 is_function, types));
     return Status::OK();
   }
 };

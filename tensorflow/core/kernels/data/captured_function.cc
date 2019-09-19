@@ -210,16 +210,17 @@ Status CreateFunctionLibraryDefinition(
   return (*result)->CopyFunctionDefFrom(func_name, *lib_def);
 }
 
-Status IsFunctionStateful(const FunctionLibraryDefinition& library,
-                          const FunctionDef& function_def) {
-  if (!function_def.signature().is_stateful()) {
-    return Status::OK();
-  }
+bool IsNodeStateful(const FunctionLibraryDefinition& library,
+                    const NodeDef& node);
+
+bool IsFunctionStateful(const FunctionLibraryDefinition& library,
+                        const FunctionDef& function_def) {
+  if (!function_def.signature().is_stateful()) return false;
 
   for (const NodeDef& node_def : function_def.node_def()) {
-    TF_RETURN_IF_ERROR(IsNodeStateful(library, node_def));
+    if (IsNodeStateful(library, node_def)) return true;
   }
-  return Status::OK();
+  return false;
 }
 
 // Returns whether an op has been whitelisted as stateless. Uses a heuristic to
@@ -227,24 +228,27 @@ Status IsFunctionStateful(const FunctionLibraryDefinition& library,
 // b/65524810. Also looks up the `op_def->name` in the global
 // `WhitelistedStatefulOpRegistry`.
 bool IsOpWhitelisted(const OpDef* op_def) {
-  return (op_def->output_arg_size() == 1 &&
-          op_def->output_arg(0).type() == DT_VARIANT &&
-          (absl::EndsWith(op_def->name(), "Dataset") ||
-           absl::EndsWith(op_def->name(), "DatasetV2"))) ||
+  return ((absl::EndsWith(op_def->name(), "Dataset") ||
+           absl::EndsWith(op_def->name(), "DatasetV2")) &&
+          op_def->output_arg_size() == 1 &&
+          op_def->output_arg(0).type() == DT_VARIANT) ||
          WhitelistedStatefulOpRegistry::Global()->Contains(op_def->name());
 }
-}  // namespace
 
-Status IsNodeStateful(const FunctionLibraryDefinition& library,
-                      const NodeDef& node) {
+bool IsNodeStateful(const FunctionLibraryDefinition& library,
+                    const NodeDef& node) {
   const OpDef* op_def;
+  Status s = OpRegistry::Global()->LookUpOpDef(node.op(), &op_def);
+  if (!s.ok()) {
+    return false;
+  }
 
-  // TODO(jsimsa): Fix C++ unit tests so that we do not have to ignore
-  // `LookUpOpDef` errors here.
-  if (!OpRegistry::Global()->LookUpOpDef(node.op(), &op_def).ok() ||
-      IsOpWhitelisted(op_def) || !op_def->is_stateful() ||
-      op_def->name() == "Assert") {
-    return Status::OK();
+  if (IsOpWhitelisted(op_def)) return false;
+
+  if (!op_def->is_stateful()) return false;
+
+  if (op_def->name() == "Assert") {
+    return false;
   }
 
   if (op_def->name() == "If") {
@@ -252,13 +256,10 @@ Status IsNodeStateful(const FunctionLibraryDefinition& library,
         library.Find(node.attr().at("then_branch").func().name());
     const FunctionDef* else_func =
         library.Find(node.attr().at("else_branch").func().name());
-    if (then_func != nullptr) {
-      TF_RETURN_IF_ERROR(IsFunctionStateful(library, *then_func));
+    if ((then_func != nullptr && !IsFunctionStateful(library, *then_func)) &&
+        (else_func != nullptr && !IsFunctionStateful(library, *else_func))) {
+      return false;
     }
-    if (else_func != nullptr) {
-      TF_RETURN_IF_ERROR(IsFunctionStateful(library, *else_func));
-    }
-    return Status::OK();
   }
 
   if (op_def->name() == "While") {
@@ -266,17 +267,15 @@ Status IsNodeStateful(const FunctionLibraryDefinition& library,
         library.Find(node.attr().at("cond").func().name());
     const FunctionDef* body_func =
         library.Find(node.attr().at("body").func().name());
-    if (cond_func != nullptr) {
-      TF_RETURN_IF_ERROR(IsFunctionStateful(library, *cond_func));
+    if ((cond_func != nullptr && !IsFunctionStateful(library, *cond_func)) &&
+        (body_func != nullptr && !IsFunctionStateful(library, *body_func))) {
+      return false;
     }
-    if (body_func != nullptr) {
-      TF_RETURN_IF_ERROR(IsFunctionStateful(library, *body_func));
-    }
-    return Status::OK();
   }
-
-  return errors::FailedPrecondition(op_def->name(), " is stateful.");
+  return true;
 }
+
+}  // namespace
 
 Status MakeIteratorFromInputElement(
     IteratorContext* ctx, const std::vector<Tensor>& input_element,
@@ -407,7 +406,6 @@ Status CapturedFunction::Instantiate(
   FunctionLibraryRuntime::InstantiateOptions inst_opts;
   inst_opts.lib_def = metadata_->lib_def();
   inst_opts.create_kernels_eagerly = true;
-  inst_opts.default_device_to_target = metadata_->use_default_device();
   if (!metadata_->use_inter_op_parallelism()) {
     inst_opts.executor_type = "SINGLE_THREADED_EXECUTOR";
   }
@@ -439,22 +437,11 @@ Status CapturedFunction::Instantiate(
     // TODO(jsimsa): Correctly handle tensors on devices other than CPU:0.
     Device* cpu_device;
     TF_RETURN_IF_ERROR(lib->device_mgr()->LookupDevice("CPU:0", &cpu_device));
-    std::unordered_map<int, DtypeAndPartialTensorShape>&
-        input_resource_variable_dtypes_and_shapes =
-            inst_opts.input_resource_dtypes_and_shapes;
-    for (size_t i = 0; i < captured_inputs_.size(); ++i) {
-      const auto& input = captured_inputs_[i];
+    for (auto& input : captured_inputs_) {
       DataType dtype = input.dtype();
       if (dtype == DT_RESOURCE) {
         const ResourceHandle& handle = input.flat<ResourceHandle>()(0);
         inst_opts.input_devices.push_back(handle.device());
-        const auto& dtypes_and_shapes = handle.dtypes_and_shapes();
-        // Set dtypes and shapes for resource variable inputs.
-        if (!dtypes_and_shapes.empty()) {
-          input_resource_variable_dtypes_and_shapes[num_non_captured_inputs +
-                                                    i] =
-              dtypes_and_shapes.at(0);
-        }
       } else if (MTypeFromDType(dtype) == HOST_MEMORY) {
         inst_opts.input_devices.push_back(cpu_device->name());
       } else {
@@ -484,14 +471,13 @@ Status CapturedFunction::Instantiate(
   return Status::OK();
 }
 
-bool CapturedFunction::IsStateful() const { return !CheckExternalState().ok(); }
-
-Status CapturedFunction::CheckExternalState() const {
+bool CapturedFunction::IsStateful() const {
   for (const auto& name : lib_def()->ListFunctionNames()) {
-    TF_RETURN_IF_ERROR(
-        IsFunctionStateful(*lib_def(), *(lib_def()->Find(name))));
+    if (IsFunctionStateful(*lib_def(), *(lib_def()->Find(name)))) {
+      return true;
+    }
   }
-  return Status::OK();
+  return false;
 }
 
 namespace {

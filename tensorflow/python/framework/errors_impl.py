@@ -28,6 +28,7 @@ from tensorflow.python.framework import error_interpolation
 from tensorflow.python.util import compat
 from tensorflow.python.util import deprecation
 from tensorflow.python.util import tf_inspect
+from tensorflow.python.util import tf_stack
 from tensorflow.python.util.tf_export import tf_export
 
 
@@ -35,11 +36,13 @@ def _compact_stack_trace(op):
   """Returns a traceback for `op` with common file prefixes stripped."""
   compact_traces = []
   common_prefix = error_interpolation.traceback_files_common_prefix([[op]])
-  # TODO(slebedev): switch to .filename etc once 2.X support is dropped.
-  for filename, lineno, name, line in op.traceback:
+  for frame in op.traceback:
+    frame = list(frame)
+    filename = frame[tf_stack.TB_FILENAME]
     if filename.startswith(common_prefix):
       filename = filename[len(common_prefix):]
-    compact_traces.append((filename, lineno, name, line))
+      frame[tf_stack.TB_FILENAME] = filename
+    compact_traces.append(tuple(frame))
   return compact_traces
 
 

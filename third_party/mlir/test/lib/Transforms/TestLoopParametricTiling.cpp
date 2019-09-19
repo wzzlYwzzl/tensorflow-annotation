@@ -43,9 +43,9 @@ public:
 
   void runOnFunction() override {
     FuncOp func = getFunction();
-    func.walk([this](loop::ForOp op) {
+    func.walk<loop::ForOp>([this](loop::ForOp op) {
       // Ignore nested loops.
-      if (op.getParentRegion()->getParentOfType<loop::ForOp>())
+      if (op.getContainingRegion()->getParentOfType<loop::ForOp>())
         return;
       extractFixedOuterLoops(op, sizes);
     });
@@ -55,9 +55,9 @@ public:
 };
 } // end namespace
 
-std::unique_ptr<OpPassBase<FuncOp>>
+FunctionPassBase *
 mlir::createSimpleParametricTilingPass(ArrayRef<int64_t> outerLoopSizes) {
-  return std::make_unique<SimpleParametricLoopTilingPass>(outerLoopSizes);
+  return new SimpleParametricLoopTilingPass(outerLoopSizes);
 }
 
 static PassRegistration<SimpleParametricLoopTilingPass>
@@ -65,8 +65,7 @@ static PassRegistration<SimpleParametricLoopTilingPass>
         "test application of parametric tiling to the outer loops so that the "
         "ranges of outer loops become static",
         [] {
-          auto pass = std::make_unique<SimpleParametricLoopTilingPass>(
-              ArrayRef<int64_t>{});
+          auto *pass = new SimpleParametricLoopTilingPass({});
           pass->sizes.assign(clOuterLoopSizes.begin(), clOuterLoopSizes.end());
           return pass;
         });

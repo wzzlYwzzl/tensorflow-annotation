@@ -37,10 +37,8 @@ StatusOr<bool> ReplaceGetSize(
   TF_ASSIGN_OR_RETURN(auto legal_shape,
                       ShapeInference::InferGetDimensionSizeShape(
                           instr->operand(0)->shape(), instr->dimension()));
-  TF_RET_CHECK(ShapeUtil::Equal(instr->shape(), legal_shape))
-      << "instr->shape() " << instr->shape().ToString() << " , "
-      << "legal_shape " << legal_shape.ToString();
-  TF_RET_CHECK(ShapeUtil::HasPrimitiveType(instr->shape(), S32));
+  TF_RET_CHECK(ShapeUtil::Equal(instr->shape(), legal_shape));
+  TF_RET_CHECK(ShapeUtil::HasPrimitiveType(instr->shape(), U32));
   HloInstruction* operand = instr->mutable_operand(0);
   int64 dim = instr->dimension();
   HloInstruction* dynamic_size =
@@ -48,9 +46,9 @@ StatusOr<bool> ReplaceGetSize(
   if (dynamic_size != nullptr) {
     TF_RETURN_IF_ERROR(instr->ReplaceAllUsesWith(dynamic_size));
   } else {
-    int32 size = instr->operand(0)->shape().dimensions(dim);
+    uint32 size = instr->operand(0)->shape().dimensions(dim);
     HloInstruction* new_instr = computation->AddInstruction(
-        HloInstruction::CreateConstant(LiteralUtil::CreateR0<int32>(size)));
+        HloInstruction::CreateConstant(LiteralUtil::CreateR0<uint32>(size)));
     TF_RETURN_IF_ERROR(instr->ReplaceAllUsesWith(new_instr));
   }
   return true;

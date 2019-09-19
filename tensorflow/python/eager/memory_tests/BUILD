@@ -30,13 +30,9 @@ cuda_py_test(
         "@six_archive//:six",
     ],
     tags = [
-        "manual",
-        "no_oss",
-        "notap",  #TODO(b/140640597): this test is flaky at the moment
         "optonly",  # The test is too slow in non-opt mode
     ],
-    # TODO(b/140065350): Re-enable
-    xla_enable_strict_auto_jit = False,
+    xla_enable_strict_auto_jit = True,
 )
 
 cuda_py_test(
@@ -54,5 +50,5 @@ cuda_py_test(
     tags = [
         "optonly",  # The test is too slow in non-opt mode
     ],
-    xla_enable_strict_auto_jit = False,  # b/140261762
+    xla_enable_strict_auto_jit = True,
 )

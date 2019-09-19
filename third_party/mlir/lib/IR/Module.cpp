@@ -25,8 +25,16 @@ using namespace mlir;
 // Module Operation.
 //===----------------------------------------------------------------------===//
 
+// Insert `module_terminator` at the end of the region's only block if it does
+// not have a terminator already. If the region is empty, insert a new block
+// first.
+static void ensureModuleTerminator(Region &region, Builder &builder,
+                                   Location loc) {
+  impl::ensureRegionTerminator<ModuleTerminatorOp>(region, builder, loc);
+}
+
 void ModuleOp::build(Builder *builder, OperationState *result) {
-  ensureTerminator(*result->addRegion(), *builder, result->location);
+  ensureModuleTerminator(*result->addRegion(), *builder, result->location);
 }
 
 /// Construct a module from the given context.
@@ -49,7 +57,7 @@ ParseResult ModuleOp::parse(OpAsmParser *parser, OperationState *result) {
     return failure();
 
   // Ensure that this module has a valid terminator.
-  ensureTerminator(*body, parser->getBuilder(), result->location);
+  ensureModuleTerminator(*body, parser->getBuilder(), result->location);
   return success();
 }
 
@@ -80,12 +88,12 @@ LogicalResult ModuleOp::verify() {
   if (body->getNumArguments() != 0)
     return emitOpError("expected body to have no arguments");
 
-  // Check that none of the attributes are non-dialect attributes.
-  for (auto attr : getOperation()->getAttrList().getAttrs()) {
-    if (!attr.first.strref().contains('.'))
-      return emitOpError(
-                 "can only contain dialect-specific attributes, found: '")
-             << attr.first << "'";
+  if (body->empty() || !isa<ModuleTerminatorOp>(body->back())) {
+    return emitOpError("expects region to end with '" +
+                       ModuleTerminatorOp::getOperationName() + "'")
+               .attachNote()
+           << "in custom textual format, the absence of terminator implies '"
+           << ModuleTerminatorOp::getOperationName() << "'";
   }
 
   return success();
@@ -94,3 +102,14 @@ LogicalResult ModuleOp::verify() {
 /// Return body of this module.
 Region &ModuleOp::getBodyRegion() { return getOperation()->getRegion(0); }
 Block *ModuleOp::getBody() { return &getBodyRegion().front(); }
+
+//===----------------------------------------------------------------------===//
+// Module Terminator Operation.
+//===----------------------------------------------------------------------===//
+
+LogicalResult ModuleTerminatorOp::verify() {
+  if (!isa_and_nonnull<ModuleOp>(getOperation()->getParentOp()))
+    return emitOpError() << "is expected to terminate a '"
+                         << ModuleOp::getOperationName() << "' operation";
+  return success();
+}

@@ -2,7 +2,6 @@
 #   Optimization routines.
 
 load("//tensorflow:tensorflow.bzl", "py_test", "tf_py_test")
-load("//tensorflow:tensorflow.bzl", "cuda_py_test")
 
 package(
     default_visibility = ["//tensorflow:__subpackages__"],
@@ -211,12 +210,13 @@ py_test(
     ],
 )
 
-cuda_py_test(
+py_test(
     name = "reg_adagrad_optimizer_test",
     srcs = ["python/training/reg_adagrad_optimizer_test.py"],
-    additional_deps = [
+    python_version = "PY2",
+    srcs_version = "PY2AND3",
+    deps = [
         ":opt_py",
-        "//third_party/py/numpy",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:constant_op",
         "//tensorflow/python:dtypes",
@@ -226,12 +226,15 @@ cuda_py_test(
         "//tensorflow/python:resource_variable_ops",
         "//tensorflow/python:variable_scope",
         "//tensorflow/python:variables",
+        "//third_party/py/numpy",
     ],
 )
 
 py_test(
     name = "nadam_optimizer_test",
     srcs = ["python/training/nadam_optimizer_test.py"],
+    python_version = "PY2",
+    srcs_version = "PY2AND3",
     deps = [
         ":opt_py",
         "//tensorflow/python:array_ops",

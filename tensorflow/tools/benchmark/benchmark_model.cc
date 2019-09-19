@@ -33,7 +33,6 @@ limitations under the License.
 #include "tensorflow/core/graph/algorithm.h"
 #include "tensorflow/core/graph/graph.h"
 #include "tensorflow/core/graph/graph_constructor.h"
-#include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/env.h"
@@ -102,7 +101,7 @@ void CreateTensorsFromInputInfo(
         if (!input.initialization_values.empty()) {
           LOG(FATAL) << "Initialization values are not supported for strings";
         }
-        auto type_tensor = input_tensor.flat<tstring>();
+        auto type_tensor = input_tensor.flat<string>();
         type_tensor = type_tensor.constant("");
         break;
       }
@@ -533,34 +532,24 @@ int Main(int argc, char** argv) {
     InputLayerInfo input;
     CHECK(DataTypeFromString(input_layer_types[n], &input.data_type))
         << input_layer_types[n] << " was an invalid type";
-
-    std::vector<string> split_layer_shapes =
-        str_util::Split(input_layer_shapes[n], ',');
-    for (const string& layer_shape : split_layer_shapes) {
-      int32 tmp;
-      CHECK(strings::safe_strto32(layer_shape, &tmp))
-          << "Incorrect size string specified: " << input_layer_shapes[n];
-      if (tmp == -1) {
+    std::vector<int32> sizes;
+    CHECK(str_util::SplitAndParseAsInts(input_layer_shapes[n], ',', &sizes))
+        << "Incorrect size string specified: " << input_layer_shapes[n];
+    for (int i = 0; i < sizes.size(); ++i) {
+      int32 size = sizes[i];
+      if (size == -1) {
         LOG(ERROR) << "Any unknown sizes in the shapes (-1's) must be replaced"
                    << " with the size you want to benchmark with.";
         return -1;
-      } else {
-        input.shape.AddDim(tmp);
       }
+      input.shape.AddDim(sizes[i]);
     }
     input.name = input_layers[n];
     if (n < input_layer_values.size()) {
-      std::vector<string> string_tokens =
-          str_util::Split(input_layer_values[n], ',');
-      input.initialization_values.clear();
-      input.initialization_values.reserve(string_tokens.size());
-      for (const string& str_val : string_tokens) {
-        float val;
-        CHECK(strings::safe_strtof(str_val, &val))
-            << "Incorrect initialization values string specified: "
-            << input_layer_values[n];
-        input.initialization_values.push_back(val);
-      }
+      CHECK(str_util::SplitAndParseAsFloats(input_layer_values[n], ',',
+                                            &input.initialization_values))
+          << "Incorrect initialization values string specified: "
+          << input_layer_values[n];
     }
     inputs.push_back(input);
   }

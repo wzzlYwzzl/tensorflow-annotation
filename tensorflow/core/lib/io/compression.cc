@@ -21,7 +21,6 @@ namespace compression {
 
 const char kNone[] = "";
 const char kGzip[] = "GZIP";
-const char kSnappy[] = "SNAPPY";
 
 }  // namespace compression
 }  // namespace io

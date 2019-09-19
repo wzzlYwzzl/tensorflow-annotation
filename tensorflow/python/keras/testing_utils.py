@@ -441,27 +441,14 @@ def get_small_mlp(num_hidden, num_classes, input_dim):
 class _SubclassModel(keras.Model):
   """A Keras subclass model."""
 
-  def __init__(self, layers, *args, **kwargs):
-    """Instantiate a model.
-
-    Args:
-      layers: a list of layers to be added to the model.
-      *args: Model's args
-      **kwargs: Model's keyword args, at most one of
-        input_tensor -> the input tensor required for ragged/sparse input.
-    """
-
-    inputs = kwargs.pop('input_tensor', None)
-    super(_SubclassModel, self).__init__(*args, **kwargs)
+  def __init__(self, layers):
+    super(_SubclassModel, self).__init__()
     # Note that clone and build doesn't support lists of layers in subclassed
     # models. Adding each layer directly here.
     for i, layer in enumerate(layers):
       setattr(self, self._layer_name_for_i(i), layer)
 
     self.num_layers = len(layers)
-
-    if inputs is not None:
-      self._set_inputs(inputs)
 
   def _layer_name_for_i(self, i):
     return 'layer{}'.format(i)
@@ -477,8 +464,8 @@ class _SubclassModel(keras.Model):
 class _SubclassModelCustomBuild(keras.Model):
   """A Keras subclass model that uses a custom build method."""
 
-  def __init__(self, layer_generating_func, *args, **kwargs):
-    super(_SubclassModelCustomBuild, self).__init__(*args, **kwargs)
+  def __init__(self, layer_generating_func):
+    super(_SubclassModelCustomBuild, self).__init__()
     self.all_layers = None
     self._layer_generating_func = layer_generating_func
 
@@ -495,50 +482,21 @@ class _SubclassModelCustomBuild(keras.Model):
     return x
 
 
-def get_model_from_layers(layers,
-                          input_shape=None,
-                          input_dtype=None,
-                          name=None,
-                          input_ragged=None,
-                          input_sparse=None):
-  """Builds a model from a sequence of layers.
-
-  Args:
-    layers: The layers used to build the network.
-    input_shape: Shape tuple of the input or 'TensorShape' instance.
-    input_dtype: Datatype of the input.
-    name: Name for the model.
-    input_ragged: Boolean, whether the input data is a ragged tensor.
-    input_sparse: Boolean, whether the input data is a sparse tensor.
-
-  Returns:
-    A Keras model.
-  """
-
+def get_model_from_layers(layers, input_shape=None, input_dtype=None):
+  """Builds a model from a sequence of layers."""
   model_type = get_model_type()
   if model_type == 'subclass':
-    inputs = None
-    if input_ragged or input_sparse:
-      inputs = keras.Input(
-          shape=input_shape,
-          dtype=input_dtype,
-          ragged=input_ragged,
-          sparse=input_sparse)
-    return _SubclassModel(layers, name=name, input_tensor=inputs)
+    return _SubclassModel(layers)
 
   if model_type == 'subclass_custom_build':
     layer_generating_func = lambda: layers
-    return _SubclassModelCustomBuild(layer_generating_func, name=name)
+    return _SubclassModelCustomBuild(layer_generating_func)
 
   if model_type == 'sequential':
-    model = keras.models.Sequential(name=name)
+    model = keras.models.Sequential()
     if input_shape:
-      model.add(
-          keras.layers.InputLayer(
-              input_shape=input_shape,
-              dtype=input_dtype,
-              ragged=input_ragged,
-              sparse=input_sparse))
+      model.add(keras.layers.InputLayer(input_shape=input_shape,
+                                        dtype=input_dtype))
     for layer in layers:
       model.add(layer)
     return model
@@ -547,15 +505,11 @@ def get_model_from_layers(layers,
     if not input_shape:
       raise ValueError('Cannot create a functional model from layers with no '
                        'input shape.')
-    inputs = keras.Input(
-        shape=input_shape,
-        dtype=input_dtype,
-        ragged=input_ragged,
-        sparse=input_sparse)
+    inputs = keras.Input(shape=input_shape, dtype=input_dtype)
     outputs = inputs
     for layer in layers:
       outputs = layer(outputs)
-    return keras.Model(inputs, outputs, name=name)
+    return keras.Model(inputs, outputs)
 
   raise ValueError('Unknown model type {}'.format(model_type))
 

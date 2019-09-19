@@ -29,10 +29,9 @@
 #include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVMPass.h"
 #include "mlir/Dialect/GPU/GPUDialect.h"
 #include "mlir/Dialect/GPU/Passes.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/LLVMIR/NVVMDialect.h"
 #include "mlir/IR/Function.h"
 #include "mlir/IR/Module.h"
+#include "mlir/LLVMIR/LLVMDialect.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/JitRunner.h"
@@ -99,8 +98,8 @@ OwnedCubin compilePtxToCubin(const std::string ptx, FuncOp &function) {
                        "cuLinkComplete");
 
   char *cubinAsChar = static_cast<char *>(cubinData);
-  OwnedCubin result =
-      std::make_unique<std::vector<char>>(cubinAsChar, cubinAsChar + cubinSize);
+  OwnedCubin result = llvm::make_unique<std::vector<char>>(
+      cubinAsChar, cubinAsChar + cubinSize);
 
   // This will also destroy the cubin data.
   RETURN_ON_CUDA_ERROR(cuLinkDestroy(linkState), "cuLinkDestroy");
@@ -109,44 +108,42 @@ OwnedCubin compilePtxToCubin(const std::string ptx, FuncOp &function) {
 }
 
 namespace {
-// A pass that lowers all Standard and Gpu operations to LLVM dialect. It does
-// not lower the GPULaunch operation to actual code but dows translate the
-// signature of its kernel argument.
-class LowerStandardAndGpuToLLVMAndNVVM
-    : public ModulePass<LowerStandardAndGpuToLLVMAndNVVM> {
+struct GPULaunchFuncOpLowering : public LLVMOpLowering {
 public:
-  void runOnModule() override {
-    ModuleOp m = getModule();
+  explicit GPULaunchFuncOpLowering(LLVMTypeConverter &lowering_)
+      : LLVMOpLowering(gpu::LaunchFuncOp::getOperationName(),
+                       lowering_.getDialect()->getContext(), lowering_) {}
 
-    OwningRewritePatternList patterns;
-    LLVMTypeConverter converter(m.getContext());
-    populateStdToLLVMConversionPatterns(converter, patterns);
-    populateGpuToNVVMConversionPatterns(converter, patterns);
-
-    ConversionTarget target(getContext());
-    target.addLegalDialect<LLVM::LLVMDialect>();
-    target.addLegalDialect<NVVM::NVVMDialect>();
-    target.addLegalOp<ModuleOp>();
-    target.addLegalOp<ModuleTerminatorOp>();
-    target.addDynamicallyLegalOp<FuncOp>(
-        [&](FuncOp op) { return converter.isSignatureLegal(op.getType()); });
-    if (failed(applyFullConversion(m, target, patterns, &converter)))
-      signalPassFailure();
+  // Convert the kernel arguments to an LLVM type, preserve the rest.
+  PatternMatchResult
+  matchAndRewrite(Operation *op, ArrayRef<Value *> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.clone(*op)->setOperands(operands);
+    return rewriter.replaceOp(op, llvm::None), matchSuccess();
   }
 };
 } // end anonymous namespace
 
 static LogicalResult runMLIRPasses(ModuleOp m) {
-  PassManager pm(m.getContext());
+  // As we gradually lower, the IR is inconsistent between passes. So do not
+  // verify inbetween.
+  PassManager pm(/*verifyPasses=*/false);
 
   pm.addPass(createGpuKernelOutliningPass());
-  pm.addPass(static_cast<std::unique_ptr<OpPassBase<ModuleOp>>>(
-      std::make_unique<LowerStandardAndGpuToLLVMAndNVVM>()));
+  pm.addPass(createConvertToLLVMIRPass([](LLVMTypeConverter &converter,
+                                          OwningRewritePatternList &patterns) {
+    populateStdToLLVMConversionPatterns(converter, patterns);
+    patterns.insert<GPULaunchFuncOpLowering>(converter);
+  }));
+  pm.addPass(createLowerGpuOpsToNVVMOpsPass());
   pm.addPass(createConvertGPUKernelToCubinPass(&compilePtxToCubin));
   pm.addPass(createGenerateCubinAccessorPass());
   pm.addPass(createConvertGpuLaunchFuncToCudaCallsPass());
 
   if (failed(pm.run(m)))
+    return failure();
+
+  if (failed(m.verify()))
     return failure();
 
   return success();

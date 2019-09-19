@@ -56,8 +56,6 @@ class Dataset : public DatasetBase {
 
   int64 Cardinality() const override { return sparse_tensor_.shape()[0]; }
 
-  Status CheckExternalState() const override { return Status::OK(); }
-
  protected:
   Status AsGraphDefInternal(SerializationContext* ctx,
                             DatasetGraphDefBuilder* b,

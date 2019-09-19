@@ -34,7 +34,7 @@ class TensorForestCreateTreeVariableOp : public OpKernel {
 
     auto* const result = new TensorForestTreeResource();
 
-    if (!result->InitFromSerialized(tree_config_t->scalar<tstring>()())) {
+    if (!result->InitFromSerialized(tree_config_t->scalar<string>()())) {
       result->Unref();
       OP_REQUIRES(context, false,
                   errors::InvalidArgument("Unable to parse tree config."));
@@ -63,7 +63,7 @@ class TensorForestTreeSerializeOp : public OpKernel {
     Tensor* output_config_t = nullptr;
     OP_REQUIRES_OK(
         context, context->allocate_output(0, TensorShape(), &output_config_t));
-    output_config_t->scalar<tstring>()() =
+    output_config_t->scalar<string>()() =
         decision_tree_resource->decision_tree().SerializeAsString();
   }
 };
@@ -86,7 +86,7 @@ class TensorForestTreeDeserializeOp : public OpKernel {
     decision_tree_resource->Reset();
 
     if (!decision_tree_resource->InitFromSerialized(
-            tree_config_t->scalar<tstring>()())) {
+            tree_config_t->scalar<string>()())) {
       OP_REQUIRES(context, false,
                   errors::InvalidArgument("Unable to parse tree config."));
     }

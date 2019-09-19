@@ -26,13 +26,13 @@
 #include "mlir/Dialect/FxpMathOps/FxpMathOps.h"
 #include "mlir/Dialect/QuantOps/QuantOps.h"
 #include "mlir/Dialect/QuantOps/QuantTypes.h"
-#include "mlir/Dialect/StandardOps/Ops.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/StandardTypes.h"
 #include "mlir/Quantizer/Support/ConstraintAnalysisGraph.h"
 #include "mlir/Quantizer/Support/Metadata.h"
 #include "mlir/Quantizer/Support/Statistics.h"
 #include "mlir/Quantizer/Support/UniformConstraints.h"
+#include "mlir/StandardOps/Ops.h"
 
 using namespace mlir;
 using namespace mlir::quantizer;
@@ -174,9 +174,9 @@ struct FxpMathTargetConfigImpl : public FxpMathTargetConfig {
     auto statsOp = cast<quant::StatisticsOp>(op);
     auto layerStatsAttr = statsOp.layerStats();
     layerStats.minValue =
-        layerStatsAttr.getValue<FloatAttr>(0).getValueAsDouble();
+        layerStatsAttr.getValue({0}).cast<FloatAttr>().getValueAsDouble();
     layerStats.maxValue =
-        layerStatsAttr.getValue<FloatAttr>(1).getValueAsDouble();
+        layerStatsAttr.getValue({1}).cast<FloatAttr>().getValueAsDouble();
     UniformConstraintsBuilder(cag).applyStats(resultNode, layerStats);
   }
 
@@ -283,5 +283,5 @@ struct FxpMathTargetConfigImpl : public FxpMathTargetConfig {
 
 std::unique_ptr<FxpMathTargetConfig>
 FxpMathTargetConfig::create(SolverContext &context) {
-  return std::make_unique<FxpMathTargetConfigImpl>(context);
+  return llvm::make_unique<FxpMathTargetConfigImpl>(context);
 }

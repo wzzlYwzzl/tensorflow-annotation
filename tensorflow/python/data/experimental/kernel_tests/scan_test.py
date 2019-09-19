@@ -19,19 +19,15 @@ from __future__ import print_function
 
 import itertools
 
-from absl.testing import parameterized
 import numpy as np
 
 from tensorflow.python.data.experimental.ops import scan_ops
 from tensorflow.python.data.kernel_tests import test_base
 from tensorflow.python.data.ops import dataset_ops
-from tensorflow.python.framework import combinations
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import errors
-from tensorflow.python.framework import ops
 from tensorflow.python.framework import sparse_tensor
-from tensorflow.python.framework import test_ops
 from tensorflow.python.framework import test_util
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import control_flow_ops
@@ -39,17 +35,16 @@ from tensorflow.python.ops import control_flow_v2_toggles
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import script_ops
 from tensorflow.python.ops import tensor_array_ops
-from tensorflow.python.ops import variables
 from tensorflow.python.platform import test
 
 
-class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
+@test_util.run_all_in_graph_and_eager_modes
+class ScanTest(test_base.DatasetTestBase):
 
   def _counting_dataset(self, start, scan_fn):
     return dataset_ops.Dataset.from_tensors(0).repeat().apply(
         scan_ops.scan(start, scan_fn))
 
-  @combinations.generate(test_base.default_test_combinations())
   def testCount(self):
     def make_scan_fn(step):
       return lambda state, _: (state + step, state)
@@ -67,7 +62,6 @@ class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
       with self.assertRaises(errors.OutOfRangeError):
         self.evaluate(next_element())
 
-  @combinations.generate(test_base.default_test_combinations())
   def testFibonacci(self):
     data = dataset_ops.Dataset.from_tensors(1).repeat(None).apply(
         scan_ops.scan([0, 1], lambda a, _: ([a[1], a[0] + a[1]], a[1])))
@@ -80,7 +74,6 @@ class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
     self.assertEqual(5, self.evaluate(next_element()))
     self.assertEqual(8, self.evaluate(next_element()))
 
-  @combinations.generate(test_base.default_test_combinations())
   def testSparseCount(self):
 
     def _sparse(i):
@@ -106,7 +99,6 @@ class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
       with self.assertRaises(errors.OutOfRangeError):
         self.evaluate(next_element())
 
-  @combinations.generate(test_base.default_test_combinations())
   def testTensorArraySimple(self):
 
     def scan_fn(ta, x):
@@ -133,7 +125,6 @@ class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
         requires_initialization=True,
         num_test_iterations=2)
 
-  @combinations.generate(test_base.default_test_combinations())
   def testTensorArrayWithCondReset(self):
 
     def empty():
@@ -164,7 +155,6 @@ class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
         requires_initialization=True,
         num_test_iterations=2)
 
-  @combinations.generate(test_base.default_test_combinations())
   def testTensorArrayWithCondResetByExternalCaptureBreaks(self):
 
     if control_flow_v2_toggles.control_flow_v2_enabled():
@@ -189,7 +179,6 @@ class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
         r"construct a new TensorArray inside the function"):
       dataset_ops.Dataset.range(6).apply(scan_ops.scan(start, scan_fn))
 
-  @combinations.generate(test_base.default_test_combinations())
   def testChangingStateShape(self):
     # Test the fixed-point shape invariant calculations: start with
     # initial values with known shapes, and use a scan function that
@@ -219,7 +208,6 @@ class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
     with self.assertRaises(errors.OutOfRangeError):
       self.evaluate(next_element())
 
-  @combinations.generate(test_base.default_test_combinations())
   def testIncorrectStateType(self):
 
     def _scan_fn(state, _):
@@ -232,7 +220,6 @@ class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
       dataset.apply(
           scan_ops.scan(constant_op.constant(1, dtype=dtypes.int32), _scan_fn))
 
-  @combinations.generate(test_base.default_test_combinations())
   def testIncorrectReturnType(self):
 
     def _scan_fn(unused_state, unused_input_value):
@@ -246,7 +233,6 @@ class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
       dataset.apply(
           scan_ops.scan(constant_op.constant(1, dtype=dtypes.int32), _scan_fn))
 
-  @combinations.generate(test_base.default_test_combinations())
   def testPreserveCardinality(self):
 
     def scan_fn(state, val):
@@ -261,34 +247,6 @@ class ScanTest(test_base.DatasetTestBase, parameterized.TestCase):
     get_next = self.getNext(dataset)
     with self.assertRaises(errors.InvalidArgumentError):
       self.evaluate(get_next())
-
-  @combinations.generate(
-      combinations.combine(
-          tf_api_version=2, mode="eager", use_default_device=[True, False]))
-  def testUseDefaultDevice(self, use_default_device):
-    if not test_util.is_gpu_available():
-      self.skipTest("No GPUs available.")
-
-    weights = variables.Variable(initial_value=array_ops.zeros((1000, 1000)))
-    result = variables.Variable(initial_value=array_ops.zeros((1000, 1000)))
-
-    def scan_fn(state, sample):
-      product = math_ops.matmul(sample, weights)
-      result.assign_add(product)
-      with ops.colocate_with(product):
-        device = test_ops.device_placement_op()
-      return state, device
-
-    data = variables.Variable(initial_value=array_ops.zeros((1, 1000, 1000)))
-    dataset = dataset_ops.Dataset.from_tensor_slices(data)
-    dataset = scan_ops._ScanDataset(
-        dataset, np.int64(1), scan_fn, use_default_device=use_default_device)
-    get_next = self.getNext(dataset)
-
-    if use_default_device:
-      self.assertIn(b"CPU:0", self.evaluate(get_next()))
-    else:
-      self.assertIn(b"GPU:0", self.evaluate(get_next()))
 
 
 if __name__ == "__main__":

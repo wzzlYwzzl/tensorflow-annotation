@@ -126,8 +126,8 @@ Status IteratorResource::Restore(OpKernelContext* ctx,
                                                    params.cancellation_manager,
                                                    &deregister_fn));
     auto cleanup = gtl::MakeCleanup(std::move(deregister_fn));
-    IteratorContext iter_ctx(std::move(params));
-    return captured_state->iterator->Restore(&iter_ctx, reader);
+    return captured_state->iterator->Restore(IteratorContext(std::move(params)),
+                                             reader);
   }
   return errors::FailedPrecondition(
       "Restore() failed because the iterator has not been initialized. Ensure "
@@ -355,10 +355,9 @@ FunctionLibraryRuntime* IteratorHandleOp::CreatePrivateFLR(
   // in its resource manager. The existing device will outlive the
   // IteratorResource, because we are storing the IteratorResource
   // in that device's resource manager.
-  *device_mgr =
-      absl::make_unique<StaticDeviceMgr>(RenamedDevice::NewRenamedDevice(
-          ctx->device()->name(), down_cast<Device*>(ctx->device()),
-          false /* owns_underlying */, false /* isolate_session_state */));
+  *device_mgr = absl::make_unique<DeviceMgr>(RenamedDevice::NewRenamedDevice(
+      ctx->device()->name(), down_cast<Device*>(ctx->device()),
+      false /* owns_underlying */, false /* isolate_session_state */));
   *flib_def = absl::make_unique<FunctionLibraryDefinition>(
       *ctx->function_library()->GetFunctionLibraryDefinition());
   *pflr = absl::make_unique<ProcessFunctionLibraryRuntime>(
@@ -1003,7 +1002,7 @@ void IteratorToStringHandleOp::Compute(OpKernelContext* ctx) {
   Tensor* string_handle_t;
   OP_REQUIRES_OK(ctx,
                  ctx->allocate_output(0, TensorShape({}), &string_handle_t));
-  string_handle_t->scalar<tstring>()() =
+  string_handle_t->scalar<string>()() =
       resource_handle_t.scalar<ResourceHandle>()().SerializeAsString();
 }
 
@@ -1027,7 +1026,7 @@ void IteratorFromStringHandleOp::Compute(OpKernelContext* ctx) {
 
   ResourceHandle resource_handle;
   OP_REQUIRES(
-      ctx, resource_handle.ParseFromString(string_handle_t.scalar<tstring>()()),
+      ctx, resource_handle.ParseFromString(string_handle_t.scalar<string>()()),
       errors::InvalidArgument(
           "Could not parse string_handle as a valid ResourceHandle"));
 

@@ -17,13 +17,10 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from absl.testing import parameterized
 import numpy as np
 
 from tensorflow.python.data.experimental.kernel_tests.serialization import dataset_serialization_test_base
-from tensorflow.python.data.kernel_tests import test_base
 from tensorflow.python.data.ops import dataset_ops
-from tensorflow.python.framework import combinations
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import errors
@@ -35,8 +32,7 @@ from tensorflow.python.platform import test
 
 
 class ParallelMapDatasetSerializationTest(
-    dataset_serialization_test_base.DatasetSerializationTestBase,
-    parameterized.TestCase):
+    dataset_serialization_test_base.DatasetSerializationTestBase):
 
   def setUp(self):
     self._tensor_slice_len = 7
@@ -65,7 +61,6 @@ class ParallelMapDatasetSerializationTest(
     return (dataset_ops.Dataset.from_tensor_slices(components).map(
         _map_fn, num_parallel_calls=3).repeat(self._num_epochs).prefetch(5))
 
-  @combinations.generate(test_base.default_test_combinations())
   def testSaveRestoreCore(self):
     for ds_fn in [self._build_ds, self._build_ds_with_prefetch]:
       self.run_core_tests(ds_fn, self._num_outputs)
@@ -83,7 +78,6 @@ class ParallelMapDatasetSerializationTest(
 
     self.verify_error_on_save(_build_ds, 15, errors.FailedPreconditionError)
 
-  @combinations.generate(test_base.default_test_combinations())
   def testCaptureVariableInMapFn(self):
 
     def _build_ds():
@@ -95,7 +89,6 @@ class ParallelMapDatasetSerializationTest(
 
     self.verify_error_on_save(_build_ds, 15, errors.FailedPreconditionError)
 
-  @combinations.generate(test_base.default_test_combinations())
   def testCaptureConstantInMapFn(self):
 
     def _build_ds():
@@ -105,7 +98,6 @@ class ParallelMapDatasetSerializationTest(
 
     self.run_core_tests(_build_ds, 10)
 
-  @combinations.generate(test_base.default_test_combinations())
   def testCaptureDefunInMapFn(self):
     num_outputs = 100
 
@@ -120,7 +112,6 @@ class ParallelMapDatasetSerializationTest(
 
     self.run_core_tests(_build_ds, num_outputs)
 
-  @combinations.generate(test_base.default_test_combinations())
   def testBuildDefunInMapFn(self):
     num_outputs = 100
 

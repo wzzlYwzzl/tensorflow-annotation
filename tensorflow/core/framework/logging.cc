@@ -18,7 +18,6 @@ limitations under the License.
 #include <iostream>
 
 #include "tensorflow/core/lib/strings/str_util.h"
-#include "tensorflow/core/lib/strings/strcat.h"
 
 namespace tensorflow {
 

@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#if GOOGLE_CUDA
 
 #define EIGEN_USE_GPU
 
@@ -31,10 +31,8 @@ namespace {
 
 template <typename T>
 __global__ void RollKernel(const int32 nthreads, const int32 num_dims,
-                           const T* __restrict__ input, T* __restrict__ output,
-                           const int32* __restrict__ dim_size,
-                           const int32* __restrict__ threshold,
-                           const int64* __restrict__ dim_range) {
+                           const T* input, T* output, const int32* dim_size,
+                           const int32* threshold, const int64* dim_range) {
   CUDA_1D_KERNEL_LOOP(out_idx, nthreads) {
     int64 offset = 0;
     for (int i = 0; i < num_dims; i++) {
@@ -73,7 +71,7 @@ struct Roll<GPUDevice, T> {
     d.memcpyHostToDevice(thres_buf, threshold.data(), thres_bytes);
     d.memcpyHostToDevice(range_buf, dim_range.data(), range_bytes);
 
-    GpuLaunchConfig cfg = GetGpuLaunchConfig(num_elements, d);
+    CudaLaunchConfig cfg = GetGpuLaunchConfig(num_elements, d);
 
     TF_CHECK_OK(GpuLaunchKernel(RollKernel<T>, cfg.block_count,
                                 cfg.thread_per_block, 0, d.stream(),
@@ -100,4 +98,4 @@ TF_CALL_complex128(DEFINE_GPU_SPECS);
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA

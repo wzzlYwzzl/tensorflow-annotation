@@ -34,6 +34,7 @@ from tensorflow.python.data.experimental.ops import cardinality
 from tensorflow.python.data.ops import dataset_ops
 from tensorflow.python.data.ops import iterator_ops
 from tensorflow.python.data.ops import readers
+from tensorflow.python.distribute import multi_worker_util
 from tensorflow.python.eager import context
 from tensorflow.python.framework import composite_tensor_utils
 from tensorflow.python.framework import dtypes
@@ -348,14 +349,11 @@ class OutputsAggregator(Aggregator):
     self.results = nest.pack_sequence_as(self._structure, self.results)
 
 
-def get_progbar(model, count_mode, include_metrics=True):
+def get_progbar(model, count_mode):
   """Get Progbar."""
-  if include_metrics:
-    stateful_metric_names = getattr(model, 'metrics_names', None)
-    if stateful_metric_names:
-      stateful_metric_names = stateful_metric_names[1:]  # Exclude `loss`
-  else:
-    stateful_metric_names = None
+  stateful_metric_names = None
+  if hasattr(model, 'metrics_names'):
+    stateful_metric_names = model.metrics_names[1:]  # Exclude `loss`
   return cbks.ProgbarLogger(count_mode, stateful_metrics=stateful_metric_names)
 
 
@@ -1619,15 +1617,10 @@ def unpack_iterator_input(iterator):
   return x, y, weights
 
 
-def infer_steps_for_dataset(model,
-                            dataset,
-                            steps,
-                            epochs=1,
-                            steps_name='steps'):
+def infer_steps_for_dataset(dataset, steps, epochs=1, steps_name='steps'):
   """Infers steps_per_epoch needed to loop through a dataset.
 
   Arguments:
-      model: Keras model instance.
       dataset: Input data of type tf.data.Dataset.
       steps: Number of steps to draw from the dataset (may be None if unknown).
       epochs: Number of times to iterate over the dataset.
@@ -1645,7 +1638,7 @@ def infer_steps_for_dataset(model,
     ValueError: In case of invalid argument values.
   """
   assert isinstance(dataset, dataset_ops.DatasetV2)
-  if (model._in_multi_worker_mode() and
+  if (multi_worker_util.in_multi_worker_mode() and
       dataset.options().experimental_distribute.auto_shard):
     # If the dataset would be auto-sharded, we should not infer a local
     # steps_per_epoch due to the possible inbalanced sharding between workers.

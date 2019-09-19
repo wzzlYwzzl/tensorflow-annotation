@@ -24,7 +24,6 @@ py_library(
     srcs_version = "PY2AND3",
     visibility = ["//visibility:public"],
     deps = [
-        ":check_numerics_callback",
         ":debug_data",
         ":debug_gradients",
         ":debug_graphs",
@@ -50,21 +49,8 @@ py_library(
         ":session_debug_testlib",
         ":source_remote",
     ] + if_not_windows([
-        ":debug_examples_v1",
-        ":debug_examples_v2",
+        ":debug_examples",
     ]),
-)
-
-py_library(
-    name = "check_numerics_callback",
-    srcs = ["lib/check_numerics_callback.py"],
-    srcs_version = "PY2AND3",
-    deps = [
-        ":source_utils",
-        "//tensorflow/python:array_ops",
-        "//tensorflow/python:op_callbacks",
-        "//third_party/py/numpy",
-    ],
 )
 
 py_library(
@@ -422,7 +408,7 @@ py_library(
 )
 
 py_library(
-    name = "debug_examples_v1",
+    name = "debug_examples",
     deps = [
         ":debug_errors_lib",
         ":debug_fibonacci_lib",
@@ -433,25 +419,9 @@ py_library(
     ]),
 )
 
-py_library(
-    name = "debug_examples_v2",
-    deps = [
-        ":debug_fibonacci_lib",
-        ":debug_mnist_lib",
-    ],
-)
-
 py_binary(
     name = "debug_fibonacci",
-    srcs = ["examples/v1/debug_fibonacci.py"],
-    python_version = "PY2",
-    srcs_version = "PY2AND3",
-    deps = [":debug_fibonacci_lib"],
-)
-
-py_binary(
-    name = "debug_fibonacci_v2",
-    srcs = ["examples/v2/debug_fibonacci_v2.py"],
+    srcs = ["examples/debug_fibonacci.py"],
     python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [":debug_fibonacci_lib"],
@@ -459,10 +429,7 @@ py_binary(
 
 py_library(
     name = "debug_fibonacci_lib",
-    srcs = [
-        "examples/v1/debug_fibonacci.py",
-        "examples/v2/debug_fibonacci_v2.py",
-    ],
+    srcs = ["examples/debug_fibonacci.py"],
     srcs_version = "PY2AND3",
     deps = [
         ":debug_py",
@@ -474,7 +441,7 @@ py_library(
 
 py_binary(
     name = "debug_errors",
-    srcs = ["examples/v1/debug_errors.py"],
+    srcs = ["examples/debug_errors.py"],
     python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [":debug_errors_lib"],
@@ -482,7 +449,7 @@ py_binary(
 
 py_library(
     name = "debug_errors_lib",
-    srcs = ["examples/v1/debug_errors.py"],
+    srcs = ["examples/debug_errors.py"],
     srcs_version = "PY2AND3",
     deps = [
         ":debug_py",
@@ -499,39 +466,20 @@ py_binary(
     deps = [":debug_mnist_lib"],
 )
 
-py_binary(
-    name = "debug_mnist_v1",
-    srcs = ["examples/v1/debug_mnist_v1.py"],
-    python_version = "PY2",
-    srcs_version = "PY2AND3",
-    deps = [":debug_mnist_lib"],
-)
-
-py_binary(
-    name = "debug_mnist_v2",
-    srcs = ["examples/v2/debug_mnist_v2.py"],
-    python_version = "PY2",
-    srcs_version = "PY2AND3",
-    deps = [":debug_mnist_lib"],
-)
-
 py_library(
     name = "debug_mnist_lib",
-    srcs = [
-        "examples/debug_mnist.py",
-        "examples/v1/debug_mnist_v1.py",
-        "examples/v2/debug_mnist_v2.py",
-    ],
+    srcs = ["examples/debug_mnist.py"],
     srcs_version = "PY2AND3",
     deps = [
         ":debug_py",
         "//tensorflow:tensorflow_py",
+        "//tensorflow/examples/tutorials/mnist:input_data",
     ],
 )
 
 py_binary(
     name = "debug_tflearn_iris",
-    srcs = ["examples/v1/debug_tflearn_iris.py"],
+    srcs = ["examples/debug_tflearn_iris.py"],
     python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [":debug_tflearn_iris_lib"],
@@ -539,7 +487,7 @@ py_binary(
 
 py_library(
     name = "debug_tflearn_iris_lib",
-    srcs = ["examples/v1/debug_tflearn_iris.py"],
+    srcs = ["examples/debug_tflearn_iris.py"],
     srcs_version = "PY2AND3",
     deps = [
         ":debug_py",
@@ -550,7 +498,7 @@ py_library(
 
 py_binary(
     name = "debug_keras",
-    srcs = ["examples/v1/debug_keras.py"],
+    srcs = ["examples/debug_keras.py"],
     python_version = "PY2",
     srcs_version = "PY2AND3",
     deps = [":debug_keras_lib"],
@@ -558,7 +506,7 @@ py_binary(
 
 py_library(
     name = "debug_keras_lib",
-    srcs = ["examples/v1/debug_keras.py"],
+    srcs = ["examples/debug_keras.py"],
     srcs_version = "PY2AND3",
     deps = [
         ":debug_py",
@@ -609,24 +557,6 @@ py_test(
         "//tensorflow/python:platform",
         "//tensorflow/python:platform_test",
         "//third_party/py/numpy",
-    ],
-)
-
-cuda_py_test(
-    name = "check_numerics_callback_test",
-    size = "small",
-    srcs = ["lib/check_numerics_callback_test.py"],
-    additional_deps = [
-        ":check_numerics_callback",
-        "//third_party/py/numpy",
-        "//tensorflow/python:framework_test_lib",
-        "//tensorflow/python:gradients",
-        "//tensorflow/python:math_ops",
-        "//tensorflow/python:platform_test",
-        "//tensorflow/python:training",
-        "//tensorflow/python:variables",
-        "//tensorflow/python/data/ops:dataset_ops",
-        "//tensorflow/python/keras",
     ],
 )
 
@@ -1245,9 +1175,9 @@ py_test(
 )
 
 sh_test(
-    name = "examples_v1_test",
+    name = "examples_test",
     size = "medium",
-    srcs = ["examples/v1/examples_v1_test.sh"],
+    srcs = ["examples/examples_test.sh"],
     data = [
         ":debug_errors",
         ":debug_fibonacci",
@@ -1258,18 +1188,6 @@ sh_test(
     ],
     tags = [
         "no_windows",
-    ],
-)
-
-sh_test(
-    name = "examples_v2_test",
-    size = "medium",
-    srcs = ["examples/v2/examples_v2_test.sh"],
-    data = [
-        ":debug_fibonacci_v2",
-        ":debug_mnist_v2",
-    ],
-    tags = [
-        "no_windows",
+        "v1only",
     ],
 )

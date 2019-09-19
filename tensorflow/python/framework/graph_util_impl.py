@@ -50,8 +50,6 @@ _CONTROL_FLOW_OP_NAMES_OR_IDENTITY = [
     "Enter",
     "Exit",
     "Identity",
-    "Merge",
-    "NextIteration",
 ]
 
 
@@ -258,7 +256,7 @@ def convert_variables_to_constants(sess,
     GraphDef containing a simplified version of the original.
   """
 
-  get_input_name = lambda node, index=0: node.input[index].split(":")[0]
+  get_input_name = lambda node: node.input[0].split(":")[0]
 
   def create_const_op(node_name, dtype, data, data_shape=None):
     """Creates a Const op."""
@@ -302,28 +300,14 @@ def convert_variables_to_constants(sess,
       # There can be one or more Identity or control flow ops in between the
       # ReadVariableOp and VarHandleOp. Store the ops with the associated
       # dtypes.
-      source_op_names = [get_input_name(node)]
-      while (source_op_names and map_name_to_node[source_op_names[0]].op in
+      source_op_name = get_input_name(node)
+      while (map_name_to_node[source_op_name].op in
              _CONTROL_FLOW_OP_NAMES_OR_IDENTITY):
-        source_op_name = source_op_names.pop()
-
-        if source_op_name not in resource_op_types:
-          resource_op_types[source_op_name] = node.attr["dtype"]
-          source_op_names.append(
-              get_input_name(map_name_to_node[source_op_name]))
-
-        if map_name_to_node[source_op_name].op == "Merge":
-          merge_resource_name = get_input_name(
-              map_name_to_node[source_op_name], index=1)
-          if merge_resource_name not in resource_op_types:
-            resource_op_types[merge_resource_name] = node.attr["dtype"]
-            source_op_names.append(
-                get_input_name(map_name_to_node[merge_resource_name]))
-
-      for source_node in source_op_names:
-        if map_name_to_node[source_node].op != "VarHandleOp":
-          raise ValueError("Cannot find the variable that is an input "
-                           "to the ReadVariableOp.")
+        resource_op_types[source_op_name] = node.attr["dtype"]
+        source_op_name = get_input_name(map_name_to_node[source_op_name])
+      if map_name_to_node[source_op_name].op != "VarHandleOp":
+        raise ValueError("Cannot find the variable that is an input "
+                         "to the ReadVariableOp.")
 
   # Gets map of variables and the associated data.
   if variable_names:
@@ -346,14 +330,8 @@ def convert_variables_to_constants(sess,
     elif input_node.name in resource_op_types:
       # Converts the type of the ops between the ReadVariableOp and VarHandleOp
       # from RESOURCE_DT to the appropriate type based on the input they are
-      # referencing. Do not copy shapes due to incorrect shape info.
-      output_node.op = input_node.op
-      output_node.name = input_node.name
-      for in_node in input_node.input:
-        output_node.input.append(in_node)
-      for attr_name in input_node.attr:
-        if str(attr_name) != "_output_shapes":
-          output_node.attr[attr_name].CopyFrom(input_node.attr[attr_name])
+      # referencing.
+      output_node.CopyFrom(input_node)
       output_node.attr["T"].CopyFrom(resource_op_types[input_node.name])
     elif input_node.op == "ReadVariableOp":
       # The first branch converts all VarHandleOps of ResourceVariables to

@@ -710,12 +710,11 @@ TEST(TensorBundleTest, StringTensorsOldFormat) {
   EXPECT_EQ(AllTensorKeys(&reader),
             std::vector<string>({"floats", "scalar", "string_tensor", "strs"}));
 
-  Expect<tstring>(&reader, "string_tensor",
-                  Tensor(DT_STRING, TensorShape({1})));
-  Expect<tstring>(&reader, "scalar", test::AsTensor<tstring>({"hello"}));
-  Expect<tstring>(
+  Expect<string>(&reader, "string_tensor", Tensor(DT_STRING, TensorShape({1})));
+  Expect<string>(&reader, "scalar", test::AsTensor<string>({"hello"}));
+  Expect<string>(
       &reader, "strs",
-      test::AsTensor<tstring>({"hello", "", "x01", string(1 << 10, 'c')}));
+      test::AsTensor<string>({"hello", "", "x01", string(1 << 10, 'c')}));
   Expect<float>(&reader, "floats", Constant_2x3<float>(16.18));
 }
 
@@ -727,19 +726,14 @@ TEST(TensorBundleTest, StringTensors) {
     BundleWriter writer(Env::Default(), Prefix("foo"));
     TF_EXPECT_OK(writer.Add("string_tensor",
                             Tensor(DT_STRING, TensorShape({1}))));  // Empty.
-    TF_EXPECT_OK(writer.Add("scalar", test::AsTensor<tstring>({"hello"})));
+    TF_EXPECT_OK(writer.Add("scalar", test::AsTensor<string>({"hello"})));
     TF_EXPECT_OK(writer.Add(
         "strs",
-        test::AsTensor<tstring>({"hello", "", "x01", string(1 << 25, 'c')})));
+        test::AsTensor<string>({"hello", "", "x01", string(1 << 25, 'c')})));
 
     // Requires a 64-bit length.
-    tstring* backing_string = long_string_tensor.flat<tstring>().data();
-#ifdef USE_TSTRING
-    backing_string->resize_uninitialized(kLongLength);
-    std::char_traits<char>::assign(backing_string->data(), kLongLength, 'd');
-#else   // USE_TSTRING
+    string* backing_string = long_string_tensor.flat<string>().data();
     backing_string->assign(kLongLength, 'd');
-#endif  // USE_TSTRING
     TF_EXPECT_OK(writer.Add("long_scalar", long_string_tensor));
 
     // Mixes in some floats.
@@ -753,12 +747,12 @@ TEST(TensorBundleTest, StringTensors) {
               std::vector<string>({"floats", "long_scalar", "scalar",
                                    "string_tensor", "strs"}));
 
-    Expect<tstring>(&reader, "string_tensor",
-                    Tensor(DT_STRING, TensorShape({1})));
-    Expect<tstring>(&reader, "scalar", test::AsTensor<tstring>({"hello"}));
-    Expect<tstring>(
+    Expect<string>(&reader, "string_tensor",
+                   Tensor(DT_STRING, TensorShape({1})));
+    Expect<string>(&reader, "scalar", test::AsTensor<string>({"hello"}));
+    Expect<string>(
         &reader, "strs",
-        test::AsTensor<tstring>({"hello", "", "x01", string(1 << 25, 'c')}));
+        test::AsTensor<string>({"hello", "", "x01", string(1 << 25, 'c')}));
 
     Expect<float>(&reader, "floats", Constant_2x3<float>(16.18));
 
@@ -773,17 +767,17 @@ TEST(TensorBundleTest, StringTensors) {
     EXPECT_EQ(TensorShape({1}), shape);
 
     // Zero-out the string so that we can be sure the new one is read in.
-    tstring* backing_string = long_string_tensor.flat<tstring>().data();
+    string* backing_string = long_string_tensor.flat<string>().data();
     backing_string->assign("");
 
     // Read long_scalar and check it contains kLongLength 'd's.
     TF_ASSERT_OK(reader.Lookup("long_scalar", &long_string_tensor));
-    ASSERT_EQ(backing_string, long_string_tensor.flat<tstring>().data());
+    ASSERT_EQ(backing_string, long_string_tensor.flat<string>().data());
     EXPECT_EQ(kLongLength, backing_string->length());
-    for (size_t i = 0; i < kLongLength; i++) {
+    for (char c : *backing_string) {
       // Not using ASSERT_EQ('d', c) because this way is twice as fast due to
       // compiler optimizations.
-      if ((*backing_string)[i] != 'd') {
+      if (c != 'd') {
         FAIL() << "long_scalar is not full of 'd's as expected.";
         break;
       }
@@ -951,7 +945,7 @@ TEST(TensorBundleTest, Checksum) {
     auto WriteStrings = []() {
       BundleWriter writer(Env::Default(), Prefix("strings"));
       TF_EXPECT_OK(
-          writer.Add("foo", test::AsTensor<tstring>({"hello", "world"})));
+          writer.Add("foo", test::AsTensor<string>({"hello", "world"})));
       TF_ASSERT_OK(writer.Finish());
     };
     // Corrupts the first two bytes, which are the varint32-encoded lengths

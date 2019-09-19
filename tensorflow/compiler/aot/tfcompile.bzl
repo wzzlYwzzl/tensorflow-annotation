@@ -1,3 +1,5 @@
+# -*- Python -*-
+
 """Build macro that compiles a TensorFlow graph into a cc_library.
 
 To use from your BUILD file, add the following line to load the macro:

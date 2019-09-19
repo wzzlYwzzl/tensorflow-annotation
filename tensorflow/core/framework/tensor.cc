@@ -66,17 +66,6 @@ namespace tensorflow {
 // code).
 REGISTER_UNARY_VARIANT_DECODE_FUNCTION(Tensor, "tensorflow::Tensor");
 
-bool TensorBuffer::GetAllocatedBytes(size_t* out_bytes) const {
-  AllocationDescription allocation_description;
-  FillAllocationDescription(&allocation_description);
-  if (allocation_description.allocated_bytes() > 0) {
-    *out_bytes = allocation_description.allocated_bytes();
-    return true;
-  } else {
-    return false;
-  }
-}
-
 namespace {
 
 // An un-templated base class for Buffer.
@@ -86,16 +75,6 @@ class BufferBase : public TensorBuffer {
       : TensorBuffer(data_ptr), alloc_(alloc) {}
 
   TensorBuffer* root_buffer() override { return this; }
-
-  bool GetAllocatedBytes(size_t* out_bytes) const override {
-    if (alloc_->TracksAllocationSizes()) {
-      *out_bytes = alloc_->AllocatedSize(data());
-      return *out_bytes > 0;
-    } else {
-      return false;
-    }
-  }
-
   void FillAllocationDescription(AllocationDescription* proto) const override {
     void* data_ptr = data();
     int64 rb = size();
@@ -189,7 +168,7 @@ struct Helper {
 // Helper specialization for string (the only non-simple type we
 // support).
 template <>
-struct Helper<tstring> {
+struct Helper<string> {
   // Proto message uses RepeatedFieldType to hold repeated T.
   typedef protobuf::RepeatedPtrField<string> RepeatedFieldType;
 
@@ -197,7 +176,7 @@ struct Helper<tstring> {
   // "out", which is usually the TensorProto::tensor_content.
   template <typename Destination>
   static void Encode(TensorBuffer* in, int64 n, Destination* out) {
-    port::EncodeStringList(in->base<const tstring>(), n, out);
+    port::EncodeStringList(in->base<const string>(), n, out);
   }
 
   // Decodes "n" elements of type string from "in" and constructs a
@@ -205,8 +184,8 @@ struct Helper<tstring> {
   // usually the TensorProto::tensor_content.
   template <typename Source>
   static TensorBuffer* Decode(Allocator* a, const Source& in, int64 n) {
-    Buffer<tstring>* buf = new Buffer<tstring>(a, n);
-    tstring* strings = buf->template base<tstring>();
+    Buffer<string>* buf = new Buffer<string>(a, n);
+    string* strings = buf->template base<string>();
     if (strings == nullptr || !port::DecodeStringList(in, strings, n)) {
       buf->Unref();
       return nullptr;
@@ -218,8 +197,8 @@ struct Helper<tstring> {
   // stored in buffer "in".
   static int64 TotalBytes(TensorBuffer* in, int n) {
     int64 tot = in->size();
-    DCHECK_EQ(tot, sizeof(tstring) * n);
-    const tstring* p = in->base<const tstring>();
+    DCHECK_EQ(tot, sizeof(string) * n);
+    const string* p = in->base<const string>();
     for (int i = 0; i < n; ++i, ++p) tot += p->size();
     return tot;
   }
@@ -323,7 +302,7 @@ PROTO_TRAITS(uint32, uint32, uint32);
 PROTO_TRAITS(int16, int32, int);
 PROTO_TRAITS(int8, int32, int);
 PROTO_TRAITS(bool, bool, bool);
-PROTO_TRAITS(tstring, tstring, string);
+PROTO_TRAITS(string, string, string);
 PROTO_TRAITS(qint8, int32, int);
 PROTO_TRAITS(quint8, int32, int);
 PROTO_TRAITS(qint16, int32, int);
@@ -514,13 +493,8 @@ TensorBuffer* FromProtoField(Allocator* a, const TensorProto& in, int64 n) {
       std::copy_n(begin, n, data);
     } else {
       std::copy_n(begin, in_n, data);
-      if (std::is_trivially_copyable<T>::value) {
-        const T last = *(data + in_n - 1);
-        std::fill_n(data + in_n, n - in_n, last);
-      } else {
-        const T& last = *(data + in_n - 1);
-        std::fill_n(data + in_n, n - in_n, last);
-      }
+      const T& last = *(data + in_n - 1);
+      std::fill_n(data + in_n, n - in_n, last);
     }
   }
 
@@ -653,14 +627,14 @@ bool Tensor::IsInitialized() const {
 }
 
 void Tensor::CheckType(DataType expected_dtype) const {
-  CHECK_EQ(dtype(), expected_dtype)
-      << " " << DataTypeString(expected_dtype) << " expected, got "
+  CHECK_EQ(dtype(), expected_dtype) << " "
+      << DataTypeString(expected_dtype) << " expected, got "
       << DataTypeString(dtype());
 }
 
 void Tensor::CheckTypeAndIsAligned(DataType expected_dtype) const {
-  CHECK_EQ(dtype(), expected_dtype)
-      << " " << DataTypeString(expected_dtype) << " expected, got "
+  CHECK_EQ(dtype(), expected_dtype) << " "
+      << DataTypeString(expected_dtype) << " expected, got "
       << DataTypeString(dtype());
   CHECK(IsAligned()) << "ptr = " << base<void>();
 }
@@ -739,7 +713,7 @@ bool Tensor::RefCountIsOne() const {
     CASE(uint64, SINGLE_ARG(STMTS))                            \
     CASE(int16, SINGLE_ARG(STMTS))                             \
     CASE(int8, SINGLE_ARG(STMTS))                              \
-    CASE(tstring, SINGLE_ARG(STMTS))                           \
+    CASE(string, SINGLE_ARG(STMTS))                            \
     CASE(complex64, SINGLE_ARG(STMTS))                         \
     CASE(complex128, SINGLE_ARG(STMTS))                        \
     CASE(int64, SINGLE_ARG(STMTS))                             \
@@ -810,13 +784,6 @@ static Allocator* get_default_cpu_allocator() {
 Tensor::Tensor(DataType type, const TensorShape& shape)
     : Tensor(get_default_cpu_allocator(), type, shape) {}
 
-bool Tensor::HostScalarTensorBufferBase::GetAllocatedBytes(
-    size_t* out_bytes) const {
-  // `this->FillAllocationDescription()` never sets allocated bytes information,
-  // so we can short-circuit the construction of an `AllocationDescription`.
-  return false;
-}
-
 void Tensor::HostScalarTensorBufferBase::FillAllocationDescription(
     AllocationDescription* proto) const {
   proto->set_requested_bytes(size());
@@ -844,9 +811,6 @@ class SubBuffer : public TensorBuffer {
 
   size_t size() const override { return sizeof(T) * elem_; }
   TensorBuffer* root_buffer() override { return root_; }
-  bool GetAllocatedBytes(size_t* out_bytes) const override {
-    return root_->GetAllocatedBytes(out_bytes);
-  }
   void FillAllocationDescription(AllocationDescription* proto) const override {
     root_->FillAllocationDescription(proto);
   }
@@ -973,13 +937,15 @@ size_t Tensor::TotalBytes() const {
 }
 
 size_t Tensor::AllocatedBytes() const {
-  if (buf_) {
-    size_t ret;
-    if (buf_->GetAllocatedBytes(&ret)) {
-      return ret;
-    }
+  TensorDescription tensor_description;
+  FillDescription(&tensor_description);
+  if (tensor_description.has_allocation_description() &&
+      tensor_description.allocation_description().allocated_bytes() > 0) {
+    return tensor_description.allocation_description().allocated_bytes();
+  } else {
+    // Fall back to TotalBytes() if the allocator doesn't have its size.
+    return TotalBytes();
   }
-  return TotalBytes();
 }
 
 bool Tensor::CanUseDMA() const {
@@ -1002,7 +968,7 @@ inline const strings::AlphaNum& PrintOneElement(const strings::AlphaNum& a,
                                                 bool print_v2) {
   return a;
 }
-inline string PrintOneElement(const tstring& a, bool print_v2) {
+inline string PrintOneElement(const string& a, bool print_v2) {
   if (print_v2) {
     return "\"" + absl::CEscape(a) + "\"";
   } else {
@@ -1198,7 +1164,7 @@ string Tensor::SummarizeValue(int64 max_entries, bool print_v2) const {
       return SummarizeArray<bool>(limit, num_elts, shape_, data, print_v2);
       break;
     case DT_STRING:
-      return SummarizeArray<tstring>(limit, num_elts, shape_, data, print_v2);
+      return SummarizeArray<string>(limit, num_elts, shape_, data, print_v2);
       break;
     default: {
       // All irregular cases

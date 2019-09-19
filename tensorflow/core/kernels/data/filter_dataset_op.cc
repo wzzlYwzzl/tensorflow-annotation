@@ -75,9 +75,8 @@ class FilterDatasetOp::Dataset : public DatasetBase {
     return name_utils::DatasetDebugString(kDatasetType);
   }
 
-  Status CheckExternalState() const override {
-    TF_RETURN_IF_ERROR(captured_func_->CheckExternalState());
-    return input_->CheckExternalState();
+  bool IsStateful() const override {
+    return captured_func_->IsStateful() || input_->IsStateful();
   }
 
  protected:

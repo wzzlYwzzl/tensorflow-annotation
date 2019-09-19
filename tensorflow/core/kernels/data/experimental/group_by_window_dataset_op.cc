@@ -108,11 +108,10 @@ class GroupByWindowDatasetOp : public UnaryDatasetOpKernel {
       return "GroupByWindowDatasetOp::Dataset";
     }
 
-    Status CheckExternalState() const override {
-      TF_RETURN_IF_ERROR(captured_key_func_->CheckExternalState());
-      TF_RETURN_IF_ERROR(captured_reduce_func_->CheckExternalState());
-      TF_RETURN_IF_ERROR(captured_window_size_func_->CheckExternalState());
-      return input_->CheckExternalState();
+    bool IsStateful() const override {
+      return captured_key_func_->IsStateful() ||
+             captured_reduce_func_->IsStateful() ||
+             captured_window_size_func_->IsStateful() || input_->IsStateful();
     }
 
    protected:

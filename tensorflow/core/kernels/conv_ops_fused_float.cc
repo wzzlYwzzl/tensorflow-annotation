@@ -23,7 +23,9 @@ namespace tensorflow {
 
 // If we're using the alternative GEMM-based implementation of Conv2D for the
 // CPU implementation, don't register this EigenTensor-based version.
-#if !defined(USE_GEMM_FOR_CONV)
+// TODO(b/119765980): Upgrade upstream Eigen to set `m_can_use_xsmm=false` for
+// contractions with non-default contraction output kernels.
+#if !defined(USE_GEMM_FOR_CONV) && !defined(EIGEN_USE_LIBXSMM)
 TF_CALL_float(REGISTER_FUSED_CPU_CONV2D);
 #endif  // !USE_GEMM_FOR_CONV
 
