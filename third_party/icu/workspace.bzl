@@ -4,6 +4,7 @@ load("//third_party:repo.bzl", "third_party_http_archive")
 
 # Sanitize a dependency so that it works correctly from code that includes
 # TensorFlow as a submodule.
+# 构建一个label
 def clean_dep(dep):
     return str(Label(dep))
 

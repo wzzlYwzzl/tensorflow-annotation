@@ -40,6 +40,7 @@ exports_files(["LICENSE"])
 
 exports_files(["platform/base.i"])
 
+# python
 py_library(
     name = "python",
     srcs = ["__init__.py"],
@@ -61,6 +62,7 @@ py_library(
     ] + if_not_v2(["//tensorflow/contrib:contrib_py"]),
 )
 
+# keras_lib
 py_library(
     name = "keras_lib",
     srcs_version = "PY2AND3",
@@ -83,6 +85,7 @@ py_library(
     ],
 )
 
+# no_contrib
 py_library(
     name = "no_contrib",
     srcs = ["__init__.py"],
@@ -196,6 +199,7 @@ py_library(
 
 tf_py_build_info_genrule()
 
+# platform
 py_library(
     name = "platform",
     srcs = glob(
@@ -220,6 +224,7 @@ py_library(
     ],
 )
 
+# platform_benchmark
 py_library(
     name = "platform_benchmark",
     srcs = ["platform/benchmark.py"],
@@ -231,6 +236,7 @@ py_library(
     ],
 )
 
+# platform_test
 py_library(
     name = "platform_test",
     srcs = ["platform/googletest.py"],
@@ -241,6 +247,7 @@ py_library(
     ],
 )
 
+# resource_loader_test
 tf_py_test(
     name = "resource_loader_test",
     size = "small",
@@ -251,6 +258,7 @@ tf_py_test(
     ],
 )
 
+# flags_test
 tf_py_test(
     name = "flags_test",
     size = "small",
@@ -261,6 +269,7 @@ tf_py_test(
     ],
 )
 
+# stocktrace_handler_test
 tf_py_test(
     name = "stacktrace_handler_test",
     size = "small",
@@ -276,6 +285,7 @@ tf_py_test(
     ],
 )
 
+# app_test
 tf_py_test(
     name = "app_test",
     size = "small",
@@ -284,6 +294,7 @@ tf_py_test(
     tags = ["notap"],
 )
 
+# cost_analyzer_lib
 cc_library(
     name = "cost_analyzer_lib",
     srcs = ["grappler/cost_analyzer.cc"],
@@ -300,6 +311,7 @@ cc_library(
     ] + tf_protos_grappler(),
 )
 
+# model_analyzer_lib
 cc_library(
     name = "model_analyzer_lib",
     srcs = ["grappler/model_analyzer.cc"],
@@ -313,6 +325,7 @@ cc_library(
     ],
 )
 
+# numpy_lib
 cc_library(
     name = "numpy_lib",
     srcs = ["lib/core/numpy.cc"],
@@ -325,6 +338,7 @@ cc_library(
     ],
 )
 
+# bfloat16_lib
 cc_library(
     name = "bfloat16_lib",
     srcs = ["lib/core/bfloat16.cc"],
@@ -338,6 +352,7 @@ cc_library(
     ],
 )
 
+# ndarray_tensor_bridge
 cc_library(
     name = "ndarray_tensor_bridge",
     srcs = ["lib/core/ndarray_tensor_bridge.cc"],
@@ -354,6 +369,7 @@ cc_library(
     ],
 )
 
+# py_exception_registry
 cc_library(
     name = "py_exception_registry",
     srcs = ["lib/core/py_exception_registry.cc"],
@@ -365,6 +381,7 @@ cc_library(
     ],
 )
 
+# kernel_registry
 cc_library(
     name = "kernel_registry",
     srcs = ["util/kernel_registry.cc"],
@@ -376,6 +393,7 @@ cc_library(
     ],
 )
 
+# cpp_python_util
 cc_library(
     name = "cpp_python_util",
     srcs = ["util/util.cc"],
@@ -389,6 +407,7 @@ cc_library(
     ],
 )
 
+# py_func_lib
 cc_library(
     name = "py_func_lib",
     srcs = ["lib/core/py_func.cc"],
@@ -412,6 +431,7 @@ cc_library(
     ],
 )
 
+# safe_ptr
 cc_library(
     name = "safe_ptr",
     srcs = ["lib/core/safe_ptr.cc"],
@@ -423,6 +443,7 @@ cc_library(
     ],
 )
 
+# ndarray_tensor
 cc_library(
     name = "ndarray_tensor",
     srcs = ["lib/core/ndarray_tensor.cc"],

@@ -1,3 +1,5 @@
+[TOC]
+
 # Contributing guidelines
 
 ## Pull Request Checklist
